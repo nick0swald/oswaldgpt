@@ -183,6 +183,48 @@ export async function submitQuestion(input: {
 
   const text = input.text?.trim() ?? "";
   const image = input.imageDataUrl?.trim();
+  if (text && !image && isOffTopicBanter(text)) {
+    const id = randomUUID();
+    const row = emptySession(id, name, classCode);
+    row.submitted_question = true;
+    row.questions_count = 1;
+    row.help_json = JSON.stringify({
+      readable: true,
+      topic: "other",
+      question_short: "Geen NaSk-vraag — kletspraat over de docent telt niet.",
+      hint_count: 1,
+      search_query: "",
+      step1: { help: "", tip: "", extra_tip: "" },
+      step2: { help: "", tip: "", extra_tip: "" },
+      step3: { help: "", tip: "", extra_tip: "" },
+      answer: { model_answer: "", explanation: "Oswald helpt alleen bij NaSk." },
+    });
+    row.question_submitted_at = nowIso();
+    memory().sessions.set(id, row);
+    try {
+      const sql = await getSql();
+      await sql`
+        insert into sessions (id, student_name, class_code, submitted_question, questions_count,
+          steps_shown, extra_tips, extra_mask, answer_shown, help_json,
+          question_submitted_at, answer_shown_at, last_active_at)
+        values (
+          ${id}, ${name}, ${classCode}, true, 1,
+          0, 0, 0, false, ${row.help_json},
+          now(), null, now()
+        )
+      `;
+    } catch (err) {
+      console.error("[oswald] askHelp banter save", err);
+    }
+    return {
+      ok: true,
+      kind: "other",
+      sessionId: id,
+      message:
+        "Leuk geprobeerd. Oswald helpt bij natuurkunde en scheikunde — niet bij kletspraat over de docent. Plak een som of begrip.",
+    };
+  }
+
   const parsed = parseNovaFromText(text);
   const novaContext = lookupNova({
     classCode: session.class_code,
@@ -270,7 +312,7 @@ export async function submitQuestion(input: {
         kind: "other",
         sessionId: session.id,
         message:
-          "Dit is geen NaSk. Oswald helpt alleen bij natuurkunde en scheikunde van de les. Geen antwoord op andere vakken.",
+          "Oswald helpt bij natuurkunde en scheikunde. Geen kletspraat of andere vakken — plak een som, begrip of Nova-plek.",
       };
     }
     if (isWink) {
@@ -306,6 +348,29 @@ export async function submitQuestion(input: {
   }
 }
 
+
+/** Grapjes over de docent / kletspraat zonder NaSk-inhoud → other. */
+function isOffTopicBanter(text: string): boolean {
+  const t = text.toLowerCase().normalize("NFKC");
+  if (!t.trim()) return false;
+  const aboutTeacher =
+    /\b(meneer\s+oswald|mr\.?\s*oswald|docent\s+oswald|nick\s+oswald)\b/.test(t) ||
+    (/\boswald\b/.test(t) &&
+      /\b(gelijk|leuk|lief|aardig|stom|dom|vriendin|girlfriend|dating|altijd|nooit|jarig|verjaardag)\b/.test(t));
+  const aboutTeacherLoose =
+    /\b(meneer|docent)\b/.test(t) &&
+    /\b(gelijk|leuk|lief|stom|dom)\b/.test(t) &&
+    !/\b(volt|ampère|ampere|stroom|spanning|kracht|dichtheid|newton|joule|watt|ohm|molecuul|atoom|nova|hoofdstuk|paragraaf|formule)\b/.test(
+      t,
+    );
+  const hasPhysics =
+    /\b(volt|ampère|ampere|stroom|spanning|kracht|dichtheid|newton|joule|watt|ohm|molecuul|atoom|nova|hoofdstuk|hst\b|paragraaf|par\.?\b|formule|binas|practicum|weerstand|lading|energie|snelheid|versnelling|druk|temperatuur|celsius|kelvin)\b/.test(
+      t,
+    );
+  if (hasPhysics) return false;
+  return aboutTeacher || aboutTeacherLoose;
+}
+
 export async function askHelp(input: {
   name?: string;
   classCode?: string;
@@ -330,6 +395,48 @@ export async function askHelp(input: {
   }
   if (image && !image.startsWith("data:image/")) {
     return { ok: false, error: "Dit bestand is geen foto." };
+  }
+
+  if (text && !image && isOffTopicBanter(text)) {
+    const id = randomUUID();
+    const row = emptySession(id, name, classCode);
+    row.submitted_question = true;
+    row.questions_count = 1;
+    row.help_json = JSON.stringify({
+      readable: true,
+      topic: "other",
+      question_short: "Geen NaSk-vraag — kletspraat over de docent telt niet.",
+      hint_count: 1,
+      search_query: "",
+      step1: { help: "", tip: "", extra_tip: "" },
+      step2: { help: "", tip: "", extra_tip: "" },
+      step3: { help: "", tip: "", extra_tip: "" },
+      answer: { model_answer: "", explanation: "Oswald helpt alleen bij NaSk." },
+    });
+    row.question_submitted_at = nowIso();
+    memory().sessions.set(id, row);
+    try {
+      const sql = await getSql();
+      await sql`
+        insert into sessions (id, student_name, class_code, submitted_question, questions_count,
+          steps_shown, extra_tips, extra_mask, answer_shown, help_json,
+          question_submitted_at, answer_shown_at, last_active_at)
+        values (
+          ${id}, ${name}, ${classCode}, true, 1,
+          0, 0, 0, false, ${row.help_json},
+          now(), null, now()
+        )
+      `;
+    } catch (err) {
+      console.error("[oswald] askHelp banter save", err);
+    }
+    return {
+      ok: true,
+      kind: "other",
+      sessionId: id,
+      message:
+        "Leuk geprobeerd. Oswald helpt bij natuurkunde en scheikunde — niet bij kletspraat over de docent. Plak een som of begrip.",
+    };
   }
 
   const parsed = parseNovaFromText(text);
@@ -406,7 +513,7 @@ export async function askHelp(input: {
       kind: "other",
       sessionId: id,
       message:
-        "Dit is geen NaSk. Oswald helpt alleen bij natuurkunde en scheikunde van de les. Geen antwoord op andere vakken.",
+        "Oswald helpt bij natuurkunde en scheikunde. Geen kletspraat of andere vakken — plak een som, begrip of Nova-plek.",
     };
   }
   if (isWink) {
