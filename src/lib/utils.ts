@@ -53,7 +53,7 @@ export function searchLinks(query: string): { label: string; href: string }[] {
 
 export async function compressImage(file: File): Promise<string> {
   const bitmap = await createImageBitmap(file);
-  const max = 1280;
+  const max = 1100;
   let { width, height } = bitmap;
   if (width > max || height > max) {
     const scale = max / Math.max(width, height);
@@ -70,5 +70,5 @@ export async function compressImage(file: File): Promise<string> {
   }
   ctx.drawImage(bitmap, 0, 0, width, height);
   bitmap.close();
-  return canvas.toDataURL("image/jpeg", 0.82);
+  return canvas.toDataURL("image/jpeg", 0.72);
 }

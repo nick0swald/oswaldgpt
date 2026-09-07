@@ -33,6 +33,9 @@ export const submitQuestionFn = createServerFn({ method: "POST" })
       sessionId: sessionIdSchema,
       text: z.string().max(4000).optional(),
       imageDataUrl: z.string().max(1_500_000).optional(),
+      chapter: z.string().max(8).optional(),
+      paragraph: z.string().max(8).optional(),
+      questionNo: z.string().max(12).optional(),
     }),
   )
   .handler(async ({ data }) => {

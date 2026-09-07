@@ -13,6 +13,7 @@ import {
   SESSION_KEY,
   SHOW_PLEDGE,
 } from "@/lib/defaults";
+import { chaptersForClass } from "@/lib/nova";
 import {
   advanceStepFn,
   askFollowupFn,
@@ -31,6 +32,9 @@ export function StudentApp() {
   const [daBest, setDaBest] = useState(false);
   const [name, setName] = useState("");
   const [classCode, setClassCode] = useState("");
+  const [chapter, setChapter] = useState("");
+  const [paragraph, setParagraph] = useState("");
+  const [questionNo, setQuestionNo] = useState("");
   const [sessionId, setSessionId] = useState("");
   const [loading, setLoading] = useState(false);
   const [question, setQuestion] = useState("");
@@ -83,8 +87,8 @@ export function StudentApp() {
       toast.error("Kies je klas.");
       return;
     }
-    if (!question.trim() && !image) {
-      toast.error("Plak de vraag, of zet een bestand.");
+    if (!question.trim() && !image && !(chapter && questionNo.trim())) {
+      toast.error("Plak de vraag, snap 'm, of kies hoofdstuk en vraag.");
       return;
     }
     setLoading(true);
@@ -105,9 +109,15 @@ export function StudentApp() {
         sessionId: string;
         text?: string;
         imageDataUrl?: string;
+        chapter?: string;
+        paragraph?: string;
+        questionNo?: string;
       } = { sessionId: started.sessionId };
       if (question.trim()) payload.text = question.trim();
       if (image) payload.imageDataUrl = image;
+      if (chapter) payload.chapter = chapter;
+      if (paragraph) payload.paragraph = paragraph;
+      if (questionNo.trim()) payload.questionNo = questionNo.trim();
       const res = await submitQuestionFn({ data: payload });
       if (!res.ok) {
         toast.error(res.error);
@@ -239,8 +249,12 @@ export function StudentApp() {
             <header>
               <h1 className="text-3xl font-extrabold tracking-tight">OswaldGPT</h1>
               <p className="mt-2 text-pretty leading-relaxed text-muted">
-                Hulp bij je NaSk-vraag — eerst nadenken, dan pas het antwoord.
+                Hulp bij je NaSk-vraag — eerst zelf nadenken.
                 {daBest ? " Oswald is da best." : ""}
+              </p>
+              <p className="mt-2 text-sm leading-relaxed text-muted">
+                Het beste bij Nova-opdrachten en toetsen. Een begrip, formule of “hoe maak ik
+                een samenvatting?” kan ook.
               </p>
             </header>
 
@@ -250,7 +264,7 @@ export function StudentApp() {
                 id="vraag"
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
-                placeholder="Plak de vraag, of snap 'm."
+                placeholder="Plak een opdracht, stel een NaSk-vraag, of kies hst / par / vraag."
               />
             </div>
 
@@ -286,22 +300,12 @@ export function StudentApp() {
             <Button
               type="button"
               variant="primary"
-              size="lg"
+              size="md"
+              className="w-fit px-6"
               onClick={() => fileRef.current?.click()}
             >
-              <span className="min-w-0 flex-1">
-                <span className="block text-lg font-extrabold">Snap je vraag</span>
-                <span className="block text-sm font-medium opacity-70">Foto of screenshot</span>
-              </span>
               <Scan />
-            </Button>
-
-            <Button type="submit" size="lg" variant="brand" loading={loading}>
-              <span className="min-w-0 flex-1">
-                <span className="block text-lg font-extrabold">Start</span>
-                <span className="block text-sm font-medium opacity-70">Eerst een hint, geen antwoord</span>
-              </span>
-              <ArrowRight />
+              Snap je vraag
             </Button>
 
             <div className="grid grid-cols-2 gap-3">
@@ -311,7 +315,18 @@ export function StudentApp() {
                   id="klas"
                   value={classCode}
                   required
-                  onChange={(e) => setClassCode(e.target.value)}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setClassCode(next);
+                    if (
+                      chapter &&
+                      next &&
+                      !chaptersForClass(next).some((c) => String(c.n) === chapter)
+                    ) {
+                      setChapter("");
+                      setParagraph("");
+                    }
+                  }}
                 >
                   <option value="">Kies klas</option>
                   {CLASSES.map((c) => (
@@ -334,6 +349,71 @@ export function StudentApp() {
                 />
               </div>
             </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <div className="min-w-0">
+                <Label htmlFor="hst">Hst</Label>
+                <Select
+                  id="hst"
+                  value={chapter}
+                  onChange={(e) => {
+                    setChapter(e.target.value);
+                    setParagraph("");
+                  }}
+                >
+                  <option value="">{classCode ? "Hst" : "Eerst klas"}</option>
+                  {(classCode ? chaptersForClass(classCode) : []).map((c) => (
+                    <option key={c.n} value={String(c.n)}>
+                      {c.n} {c.title}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="min-w-0">
+                <Label htmlFor="par">Par</Label>
+                <Select
+                  id="par"
+                  value={paragraph}
+                  onChange={(e) => setParagraph(e.target.value)}
+                  disabled={!chapter}
+                >
+                  <option value="">Par</option>
+                  {(classCode && chapter
+                    ? chaptersForClass(classCode).find((c) => String(c.n) === chapter)?.paragraphs ?? []
+                    : []
+                  ).map((p) => (
+                    <option key={p.n} value={String(p.n)}>
+                      {p.n} {p.title}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="min-w-0">
+                <Label htmlFor="opdracht">Vraag</Label>
+                <Input
+                  id="opdracht"
+                  value={questionNo}
+                  onChange={(e) => setQuestionNo(e.target.value)}
+                  maxLength={12}
+                  placeholder="3a"
+                  inputMode="text"
+                />
+              </div>
+            </div>
+
+            <Button
+              type="submit"
+              size="lg"
+              variant="brand"
+              loading={loading}
+              className="min-h-[5.75rem] py-6 [&_svg]:size-8"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block text-2xl font-extrabold tracking-tight">Hulp</span>
+                <span className="block text-sm font-medium opacity-70">Eerst een hint</span>
+              </span>
+              <ArrowRight />
+            </Button>
           </form>
         ) : null}
 
@@ -388,7 +468,6 @@ export function StudentApp() {
                 <Button type="button" size="lg" variant="primary" loading={loading} onClick={onAdvance}>
                   <span className="min-w-0 flex-1">
                     <span className="block text-lg font-extrabold">Nog een hint</span>
-                    <span className="block text-sm font-medium opacity-70">Nog geen antwoord</span>
                   </span>
                   <ArrowRight />
                 </Button>
@@ -480,7 +559,8 @@ export function StudentApp() {
               {otherMessage}
             </div>
             <p className="text-sm leading-relaxed text-muted">
-              Plak een NaSk-opdracht uit je les. Geen Nederlands, geschiedenis of andere vakken.
+              Plak een NaSk-opdracht, een begrip, of vraag hoe je een samenvatting maakt.
+              Geen Nederlands, geschiedenis of andere vakken.
             </p>
             <Button type="button" size="lg" variant="primary" onClick={onNewQuestion}>
               <span className="min-w-0 flex-1">

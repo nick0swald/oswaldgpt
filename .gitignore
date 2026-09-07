@@ -18,3 +18,5 @@ pglite-data
 *.tsbuildinfo
 AGENTS.md
 .node_modules.lock
+attachments
+*.pdf

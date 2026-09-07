@@ -8,6 +8,7 @@ import {
   STEP_TITLES,
 } from "@/lib/defaults";
 import { generateFollowup, generateHelp, type HelpPayload } from "@/lib/ai.server";
+import { lookupNova } from "@/lib/nova";
 import type { AnswerView, DayStat, FollowUp, StepView, SubmitResult, WinkView } from "@/lib/types";
 
 export type { AnswerView, StepView };
@@ -34,6 +35,51 @@ type SessionRow = {
   help_json: string | null;
 };
 
+type MemSession = SessionRow & {
+  created_at: string;
+  question_submitted_at: string | null;
+  answer_shown_at: string | null;
+};
+
+const memRoot = globalThis as typeof globalThis & {
+  __oswaldMem?: { sessions: Map<string, MemSession> };
+};
+
+function memory(): { sessions: Map<string, MemSession> } {
+  memRoot.__oswaldMem ??= { sessions: new Map() };
+  return memRoot.__oswaldMem;
+}
+
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
+function emptySession(id: string, name: string, classCode: string): MemSession {
+  return {
+    id,
+    student_name: name,
+    class_code: classCode,
+    submitted_question: false,
+    questions_count: 0,
+    steps_shown: 0,
+    extra_tips: 0,
+    extra_mask: 0,
+    answer_shown: false,
+    help_json: null,
+    created_at: nowIso(),
+    question_submitted_at: null,
+    answer_shown_at: null,
+  };
+}
+
+function patchMem(id: string, patch: Partial<MemSession>): MemSession | null {
+  const current = memory().sessions.get(id);
+  if (!current) return null;
+  const next = { ...current, ...patch };
+  memory().sessions.set(id, next);
+  return next;
+}
+
 export function pinMatches(input: string): boolean {
   const expected = (process.env.DOCENT_PIN ?? "0624345142").trim();
   const a = Buffer.from(input.trim().normalize("NFKC"));
@@ -46,19 +92,28 @@ export function pinMatches(input: string): boolean {
 }
 
 export async function ensureSeed(): Promise<void> {
-  const sql = await getSql();
-  const rows = await sql<{ n: number }>`select count(*)::int as n from roster_names`;
-  if ((rows[0]?.n ?? 0) > 0) return;
-  for (const name of DEFAULT_NAMES) {
-    await sql`insert into roster_names (name) values (${name}) on conflict (name) do nothing`;
+  try {
+    const sql = await getSql();
+    const rows = await sql<{ n: number }>`select count(*)::int as n from roster_names`;
+    if ((rows[0]?.n ?? 0) > 0) return;
+    for (const name of DEFAULT_NAMES) {
+      await sql`insert into roster_names (name) values (${name}) on conflict (name) do nothing`;
+    }
+  } catch (err) {
+    console.error("[oswald] ensureSeed db", err);
   }
 }
 
 export async function listRosterNames(): Promise<string[]> {
-  await ensureSeed();
-  const sql = await getSql();
-  const rows = await sql<{ name: string }>`select name from roster_names order by name`;
-  return rows.map((r) => r.name);
+  try {
+    await ensureSeed();
+    const sql = await getSql();
+    const rows = await sql<{ name: string }>`select name from roster_names order by name`;
+    return rows.map((r) => r.name);
+  } catch (err) {
+    console.error("[oswald] listRosterNames db", err);
+    return [...DEFAULT_NAMES];
+  }
 }
 
 export async function startSession(input: {
@@ -72,12 +127,17 @@ export async function startSession(input: {
   if (name === null) {
     return { ok: false, error: "Gebruik alleen letters in de naam, of laat leeg." };
   }
-  const sql = await getSql();
   const id = randomUUID();
-  await sql`
-    insert into sessions (id, student_name, class_code)
-    values (${id}, ${name}, ${input.classCode})
-  `;
+  memory().sessions.set(id, emptySession(id, name, input.classCode));
+  try {
+    const sql = await getSql();
+    await sql`
+      insert into sessions (id, student_name, class_code)
+      values (${id}, ${name}, ${input.classCode})
+    `;
+  } catch (err) {
+    console.error("[oswald] startSession db", err);
+  }
   return { ok: true, sessionId: id };
 }
 
@@ -85,14 +145,23 @@ export async function submitQuestion(input: {
   sessionId: string;
   text?: string;
   imageDataUrl?: string;
+  chapter?: string;
+  paragraph?: string;
+  questionNo?: string;
 }): Promise<SubmitResult> {
   const session = await loadSession(input.sessionId);
   if (!session) return { ok: false, error: "Sessie niet gevonden. Start opnieuw." };
 
   const text = input.text?.trim() ?? "";
   const image = input.imageDataUrl?.trim();
-  if (!text && !image) {
-    return { ok: false, error: "Plak de vraag, of zet een foto/screenshot." };
+  const novaContext = lookupNova({
+    classCode: session.class_code,
+    chapter: input.chapter,
+    paragraph: input.paragraph,
+    question: input.questionNo,
+  });
+  if (!text && !image && !novaContext) {
+    return { ok: false, error: "Plak de vraag, snap 'm, of kies hoofdstuk en vraag." };
   }
   if (image && image.length > 1_500_000) {
     return { ok: false, error: "De foto is te groot. Maak een scherpere, kleinere foto." };
@@ -104,8 +173,16 @@ export async function submitQuestion(input: {
     return { ok: false, error: "Je hebt genoeg vragen gesteld. Vraag je docent als je verder wilt." };
   }
 
-  const generated = await generateHelp({ text: text || undefined, imageDataUrl: image });
+  const generated = await generateHelp({
+    text: text || undefined,
+    imageDataUrl: image,
+    novaContext: novaContext || undefined,
+  });
   if (!generated.ok) return generated;
+  if (novaContext) {
+    generated.help.topic = "nask";
+    generated.help.readable = true;
+  }
   if (!generated.help.readable) {
     return {
       ok: false,
@@ -115,11 +192,13 @@ export async function submitQuestion(input: {
     };
   }
 
-  const topic = generated.help.topic ?? "nask";
-  const isWink = topic === "wink";
-  const isOther = topic === "other";
-  const sql = await getSql();
-  await sql`
+  try {
+    const topic = generated.help.topic ?? "nask";
+    const isWink = topic === "wink";
+    const isOther = topic === "other";
+    try {
+      const sql = await getSql();
+      await sql`
     update sessions
     set submitted_question = true,
         questions_count = questions_count + 1,
@@ -133,29 +212,47 @@ export async function submitQuestion(input: {
         last_active_at = now()
     where id = ${session.id}
   `;
+    } catch (err) {
+      console.error("[oswald] submit save failed", err);
+    }
+    patchMem(session.id, {
+      submitted_question: true,
+      questions_count: session.questions_count + 1,
+      steps_shown: isOther || isWink ? 0 : 1,
+      extra_tips: 0,
+      extra_mask: 0,
+      answer_shown: isWink,
+      help_json: JSON.stringify(generated.help),
+      question_submitted_at: nowIso(),
+      answer_shown_at: isWink ? nowIso() : null,
+    });
 
-  if (isOther) {
-    return {
-      ok: true,
-      kind: "other",
-      message:
-        "Dit is geen NaSk. Oswald helpt alleen bij natuurkunde en scheikunde van de les. Geen antwoord op andere vakken.",
-    };
-  }
-  if (isWink) {
-    const wink: WinkView = {
-      questionShort: generated.help.question_short,
-      wink:
-        generated.help.answer.explanation.trim() ||
-        "Dit is wel natuurkunde, maar niet van onze les. Knipoog.",
-      simpleAnswer: generated.help.answer.model_answer.trim(),
-      searchQuery:
-        generated.help.search_query.trim() || generated.help.question_short.trim() || text,
-    };
-    return { ok: true, kind: "wink", wink };
-  }
+    if (isOther) {
+      return {
+        ok: true,
+        kind: "other",
+        message:
+          "Dit is geen NaSk. Oswald helpt alleen bij natuurkunde en scheikunde van de les. Geen antwoord op andere vakken.",
+      };
+    }
+    if (isWink) {
+      const wink: WinkView = {
+        questionShort: generated.help.question_short,
+        wink:
+          generated.help.answer.explanation.trim() ||
+          "Dit is wel natuurkunde, maar niet van onze les. Knipoog.",
+        simpleAnswer: generated.help.answer.model_answer.trim(),
+        searchQuery:
+          generated.help.search_query.trim() || generated.help.question_short.trim() || text,
+      };
+      return { ok: true, kind: "wink", wink };
+    }
 
-  return { ok: true, kind: "nask", step: toStepView(generated.help, 1, 0) };
+    return { ok: true, kind: "nask", step: toStepView(generated.help, 1, 0) };
+  } catch (err) {
+    console.error("[oswald] submit failed", err);
+    return { ok: false, error: "Hulp ophalen lukte niet. Probeer het nog eens." };
+  }
 }
 
 export async function advanceStep(
@@ -171,12 +268,17 @@ export async function advanceStep(
     return { ok: true, step: toStepView(help, total, session.extra_mask) };
   }
   const next = (session.steps_shown + 1) as 2 | 3;
-  const sql = await getSql();
-  await sql`
-    update sessions
-    set steps_shown = ${next}, last_active_at = now()
-    where id = ${session.id}
-  `;
+  try {
+    const sql = await getSql();
+    await sql`
+      update sessions
+      set steps_shown = ${next}, last_active_at = now()
+      where id = ${session.id}
+    `;
+  } catch (err) {
+    console.error("[oswald] advanceStep db", err);
+  }
+  patchMem(session.id, { steps_shown: next });
   return { ok: true, step: toStepView(help, next, session.extra_mask) };
 }
 
@@ -191,14 +293,22 @@ export async function extraTip(
   }
   const bit = 1 << (session.steps_shown - 1);
   const nextMask = session.extra_mask | bit;
-  const sql = await getSql();
-  await sql`
-    update sessions
-    set extra_mask = ${nextMask},
-        extra_tips = extra_tips + ${session.extra_mask & bit ? 0 : 1},
-        last_active_at = now()
-    where id = ${session.id}
-  `;
+  try {
+    const sql = await getSql();
+    await sql`
+      update sessions
+      set extra_mask = ${nextMask},
+          extra_tips = extra_tips + ${session.extra_mask & bit ? 0 : 1},
+          last_active_at = now()
+      where id = ${session.id}
+    `;
+  } catch (err) {
+    console.error("[oswald] extraTip db", err);
+  }
+  patchMem(session.id, {
+    extra_mask: nextMask,
+    extra_tips: session.extra_tips + (session.extra_mask & bit ? 0 : 1),
+  });
   return {
     ok: true,
     step: toStepView(help, session.steps_shown as 1 | 2 | 3, nextMask),
@@ -245,14 +355,22 @@ export async function askFollowup(
   const followup: FollowUp = { question: asked, reply: generated.reply };
   const next = [...existing, followup];
   const stored = { ...help, followups: next };
-  const sql = await getSql();
-  await sql`
-    update sessions
-    set help_json = ${JSON.stringify(stored)},
-        extra_tips = extra_tips + 1,
-        last_active_at = now()
-    where id = ${session.id}
-  `;
+  try {
+    const sql = await getSql();
+    await sql`
+      update sessions
+      set help_json = ${JSON.stringify(stored)},
+          extra_tips = extra_tips + 1,
+          last_active_at = now()
+      where id = ${session.id}
+    `;
+  } catch (err) {
+    console.error("[oswald] followup db", err);
+  }
+  patchMem(session.id, {
+    help_json: JSON.stringify(stored),
+    extra_tips: session.extra_tips + 1,
+  });
   return { ok: true, followup };
 }
 
@@ -266,12 +384,17 @@ export async function revealAnswer(
   if (session.steps_shown < hintCountOf(help)) {
     return { ok: false, error: "Vraag eerst de hints." };
   }
-  const sql = await getSql();
-  await sql`
-    update sessions
-    set answer_shown = true, answer_shown_at = now(), last_active_at = now()
-    where id = ${session.id}
-  `;
+  try {
+    const sql = await getSql();
+    await sql`
+      update sessions
+      set answer_shown = true, answer_shown_at = now(), last_active_at = now()
+      where id = ${session.id}
+    `;
+  } catch (err) {
+    console.error("[oswald] revealAnswer db", err);
+  }
+  patchMem(session.id, { answer_shown: true, answer_shown_at: nowIso() });
   return {
     ok: true,
     answer: {
@@ -286,13 +409,14 @@ export async function teacherOverview(pin: string): Promise<
   { ok: true; days: DayStat[] } | { ok: false; error: string }
 > {
   if (!pinMatches(pin)) return { ok: false, error: "Onjuiste PIN." };
-  const sql = await getSql();
-  const rows = await sql<{
-    day: string;
-    questions: number;
-    answers: number;
-    avg_seconds: number | string | null;
-  }>`
+  try {
+    const sql = await getSql();
+    const rows = await sql<{
+      day: string;
+      questions: number;
+      answers: number;
+      avg_seconds: number | string | null;
+    }>`
     select
       timezone('Europe/Amsterdam', coalesce(question_submitted_at, created_at))::date::text as day,
       count(*)::int as questions,
@@ -306,18 +430,48 @@ export async function teacherOverview(pin: string): Promise<
     order by 1 desc
     limit 60
   `;
-  return {
-    ok: true,
-    days: rows.map((r) => ({
-      day: r.day,
-      questions: Number(r.questions) || 0,
-      answers: Number(r.answers) || 0,
-      avgSeconds:
-        r.avg_seconds == null || r.avg_seconds === ""
-          ? null
-          : Number(r.avg_seconds),
-    })),
-  };
+    return {
+      ok: true,
+      days: rows.map((r) => ({
+        day: r.day,
+        questions: Number(r.questions) || 0,
+        answers: Number(r.answers) || 0,
+        avgSeconds:
+          r.avg_seconds == null || r.avg_seconds === ""
+            ? null
+            : Number(r.avg_seconds),
+      })),
+    };
+  } catch (err) {
+    console.error("[oswald] teacherOverview db", err);
+    const byDay = new Map<string, { questions: number; answers: number; seconds: number[] }>();
+    for (const s of memory().sessions.values()) {
+      if (!s.submitted_question) continue;
+      const day = (s.question_submitted_at ?? s.created_at).slice(0, 10);
+      const cur = byDay.get(day) ?? { questions: 0, answers: 0, seconds: [] };
+      cur.questions += 1;
+      if (s.answer_shown) cur.answers += 1;
+      if (s.answer_shown_at && s.question_submitted_at) {
+        const sec =
+          (Date.parse(s.answer_shown_at) - Date.parse(s.question_submitted_at)) / 1000;
+        if (Number.isFinite(sec) && sec >= 0) cur.seconds.push(sec);
+      }
+      byDay.set(day, cur);
+    }
+    const days: DayStat[] = [...byDay.entries()]
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .slice(0, 60)
+      .map(([day, v]) => ({
+        day,
+        questions: v.questions,
+        answers: v.answers,
+        avgSeconds:
+          v.seconds.length === 0
+            ? null
+            : v.seconds.reduce((a, b) => a + b, 0) / v.seconds.length,
+      }));
+    return { ok: true, days };
+  }
 }
 
 export async function addRosterName(
@@ -332,8 +486,12 @@ export async function addRosterName(
   if (!NAME_PATTERN.test(cleaned)) {
     return { ok: false, error: "Gebruik alleen letters in de naam." };
   }
-  const sql = await getSql();
-  await sql`insert into roster_names (name) values (${cleaned}) on conflict (name) do nothing`;
+  try {
+    const sql = await getSql();
+    await sql`insert into roster_names (name) values (${cleaned}) on conflict (name) do nothing`;
+  } catch (err) {
+    console.error("[oswald] addRosterName db", err);
+  }
   return { ok: true, names: await listRosterNames() };
 }
 
@@ -342,20 +500,29 @@ export async function removeRosterName(
   name: string,
 ): Promise<{ ok: true; names: string[] } | { ok: false; error: string }> {
   if (!pinMatches(pin)) return { ok: false, error: "Onjuiste PIN." };
-  const sql = await getSql();
-  await sql`delete from roster_names where name = ${name}`;
+  try {
+    const sql = await getSql();
+    await sql`delete from roster_names where name = ${name}`;
+  } catch (err) {
+    console.error("[oswald] removeRosterName db", err);
+  }
   return { ok: true, names: await listRosterNames() };
 }
 
 async function loadSession(id: string): Promise<SessionRow | null> {
-  const sql = await getSql();
-  const rows = await sql<SessionRow>`
-    select id, student_name, class_code, submitted_question, questions_count,
-           steps_shown, extra_tips, extra_mask, answer_shown, help_json
-    from sessions
-    where id = ${id}
-  `;
-  return rows[0] ?? null;
+  try {
+    const sql = await getSql();
+    const rows = await sql<SessionRow>`
+      select id, student_name, class_code, submitted_question, questions_count,
+             steps_shown, extra_tips, extra_mask, answer_shown, help_json
+      from sessions
+      where id = ${id}
+    `;
+    if (rows[0]) return rows[0];
+  } catch (err) {
+    console.error("[oswald] loadSession db", err);
+  }
+  return memory().sessions.get(id) ?? null;
 }
 
 function readHelp(session: SessionRow): (HelpPayload & { followups?: FollowUp[] }) | null {

@@ -14,7 +14,7 @@ export const Route = createRootRoute({
       { title: APP_NAME },
       {
         name: "description",
-        content: "Hulp bij je NaSk-vraag — eerst nadenken, dan pas het antwoord.",
+        content: "Hulp bij je NaSk-vraag — eerst zelf nadenken.",
       },
       { name: "theme-color", content: "#09090b" },
     ],

@@ -66,20 +66,25 @@ Taal: Nederlands. Korte zinnen. Simpele woorden. Geen overbodig jargon.
 
 Eerst classificeren. Zet topic:
 
-- "nask": een echte VMBO-NaSk-opdracht uit de lesstof. Natuurkunde of scheikunde op dat niveau (snelheid, dichtheid, kracht, stroom, warmte, stoffen, reacties, formules zoals s = v × t). Ook een foto van een NaSk-werkblad. DAN de hint-stappen.
+- "nask": VMBO-NaSk. Opdrachten uit Nova, begrippen, formules, toets/examen leren, Binas, vaardigheden, én hoe je NaSk leert (samenvatting, Onthoud, begrippenlijst, aanpak van een opdracht). Ook algemene lesvragen zoals "wat is dichtheid?" of "hoe schrijf ik een samenvatting van hoofdstuk 9?". Foto van een werkblad hoort hier. DAN de hint-stappen.
 
 - "wink": het IS natuurkunde of scheikunde, maar niet van de VMBO-les (te hoog, te leuk-weetje, universiteit, quantum, relativiteit, zwarte gaten, organische chemie, trivia). DAN geen hints. Wel een knipoog, een heel kort simpel antwoord, en een zoekzin.
 
-- "other": een ander vak of geen schoolvraag (Nederlands, geschiedenis, Engels, aardrijkskunde, biologie, kale wiskunde zonder NaSk, grappen, chat). DAN geen hints en GEEN antwoord. Leeg answer.model_answer.
+- "other": een ander vak of kletspraat (Nederlands-opstel, geschiedenis, Engels, aardrijkskunde, biologie als het geen NaSk is, grappen). Let op: "hoe maak ik een samenvatting" voor NaSk/toets IS nask, geen other. DAN geen hints en GEEN antwoord. Leeg answer.model_answer.
 
 readable: false alleen als de foto/tekst onleesbaar is. Zet dan korte uitleg in question_short.
 
 Als topic "nask":
-- Stap 1 ALTIJD: "Heb je de tekst gelezen?" plus verwijzing naar blz/alinea/figuur/tabel als je die ziet.
-- Stap 2–3: kleine hints, geen eindantwoord.
-- hint_count 1–3. Nooit de uitkomst in stap 1–3.
-- answer.model_answer: modelantwoord. explanation: 2–4 zinnen.
+- Twee smaken:
+  1) Nova-opdracht (hst/par/vraag of een geplakte/gesnapte som): Stap 1 ALTIJD "Heb je de tekst gelezen?" plus Nova-plek.
+  2) Algemene NaSk-vraag of toets-hulp (begrip, formule, samenvatting, hoe leer ik dit): Stap 1 is een eerste duw, geen eindrecept. Bij een samenvatting: stuur naar Onthoud en Begrippen van dat hoofdstuk. Vraag welk hoofdstuk als dat ontbreekt.
+- Stap 2–3: kleine hints, geen volledig stappenplan-antwoord.
+- hint_count 1–3. Nooit de uitkomst of het hele recept in stap 1.
+- answer.model_answer: bij een som het modelantwoord (Nova-stijl). Bij toets-hulp/samenvatting: een kort bruikbaar recept (max 5 zinnen).
 - search_query: "".
+- Als de leerling een Nova-plek geeft (hst/par/opdracht): topic is nask. Gebruik die plek.
+
+Als de leerling een Nova-hoofdstuk/paragraaf/opdracht meestuurt, is het lesstof. Geen wink. Geen other.
 
 Als topic "wink":
 - hint_count 1. Stappen mogen kort en leeg-achtig.
@@ -91,7 +96,7 @@ Als topic "other":
 - hint_count 1. answer.model_answer: "".
 - answer.explanation: "Oswald helpt alleen bij NaSk."
 - search_query: "".
-- question_short: zeg welk vak het lijkt, zonder de vraag te beantwoorden.
+- question_short: zeg welk vak het lijkt, zonder de vraag te beantwoorden. Zeg erbij: NaSk, toetsen en samenvattingen mag wel.
 
 Houd elk veld kort (max 4 zinnen).`;
 
@@ -102,13 +107,14 @@ type ContentPart =
 export async function generateHelp(input: {
   text?: string;
   imageDataUrl?: string;
+  novaContext?: string;
 }): Promise<{ ok: true; help: HelpPayload } | { ok: false; error: string }> {
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) {
     return { ok: false, error: "Hulp is nu even niet beschikbaar. Probeer het later of vraag je docent." };
   }
 
-  const userText = buildUserText(input.text);
+  const userText = buildUserText(input.text, input.novaContext);
   const content: ContentPart[] = [{ type: "text", text: userText }];
   if (input.imageDataUrl) {
     content.push({
@@ -119,8 +125,8 @@ export async function generateHelp(input: {
 
   const body = {
     model: "grok-4.5",
-    temperature: 0.3,
-    max_tokens: 1800,
+    temperature: 0.2,
+    max_tokens: 1200,
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content },
@@ -136,42 +142,59 @@ export async function generateHelp(input: {
   };
 
   try {
-    const res = await fetch("https://api.x.ai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      const errText = await res.text().catch(() => "");
-      console.error("[oswald] xAI error", res.status, errText.slice(0, 400));
-      if (res.status === 400 && input.imageDataUrl) {
-        return generateHelp({ text: input.text || "De leerling stuurde een foto van een NaSk-vraag. De foto kon niet worden gelezen." });
-      }
-      return { ok: false, error: "Hulp ophalen lukte niet. Probeer het nog eens." };
+    const parsed = await callModel(apiKey, body);
+    if (parsed) return { ok: true, help: parsed };
+    if (input.imageDataUrl) {
+      return generateHelp({
+        text:
+          input.text ||
+          "De leerling stuurde een foto van een NaSk-vraag. De foto kon niet worden gelezen.",
+        novaContext: input.novaContext,
+      });
     }
-    const json = (await res.json()) as {
-      choices?: { message?: { content?: string } }[];
-    };
-    const raw = json.choices?.[0]?.message?.content ?? "";
-    const parsed = parseHelp(raw);
-    if (!parsed) {
-      return { ok: false, error: "Het antwoord was onduidelijk. Probeer de vraag opnieuw in te leveren." };
-    }
-    return { ok: true, help: parsed };
+    const again = await callModel(apiKey, { ...body, temperature: 0, max_tokens: 1400 });
+    if (again) return { ok: true, help: again };
+    return { ok: false, error: "Het antwoord was onduidelijk. Probeer de vraag opnieuw in te leveren." };
   } catch (err) {
     console.error("[oswald] xAI call failed", err);
     return { ok: false, error: "Hulp ophalen lukte niet. Probeer het nog eens." };
   }
 }
 
-function buildUserText(text: string | undefined): string {
+async function callModel(
+  apiKey: string,
+  body: unknown,
+): Promise<HelpPayload | null> {
+  const res = await fetch("https://api.x.ai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    console.error("[oswald] xAI error", res.status, errText.slice(0, 400));
+    return null;
+  }
+  const json = (await res.json()) as {
+    choices?: { message?: { content?: string } }[];
+  };
+  return parseHelp(json.choices?.[0]?.message?.content ?? "");
+}
+
+function buildUserText(text: string | undefined, novaContext?: string): string {
   const trimmed = text?.trim() ?? "";
   const titles = STEP_TITLES.join(" / ");
+  const nova = novaContext?.trim()
+    ? `\n\n${novaContext}\n`
+    : "\n";
   if (trimmed) {
-    return `Vraag van een VMBO-leerling:\n\n${trimmed}\n\nClassificeer (nask / wink / other). Alleen bij nask: hulp zoals Nick Oswald (${titles}). JSON volgens schema.`;
+    return `Vraag van een VMBO-leerling:${nova}\n${trimmed}\n\nClassificeer (nask / wink / other). Alleen bij nask: hulp zoals Nick Oswald (${titles}). JSON volgens schema.`;
+  }
+  if (novaContext?.trim()) {
+    return `De leerling vroeg hulp bij een Nova-opdracht.${nova}\nGeen extra tekst, wel deze plek in het boek. Classificeer als nask. Hulp zoals Nick Oswald (${titles}). JSON volgens schema.`;
   }
   return `De leerling stuurde een foto/screenshot. Lees wat er staat. Classificeer (nask / wink / other). Alleen bij nask: hulp zoals Nick Oswald (${titles}). JSON volgens schema.`;
 }
@@ -230,6 +253,7 @@ Regels:
 - Nederlands. Korte zinnen. Simpel.
 - Geen eindantwoord. Geen uitkomst. Geen getal dat de leerling moet vinden.
 - Help de wedervraag: leg een begrip uit, stuur terug naar de tekst/blz/alinea, of geef een kleine duw.
+- Bij leren/samenvatting: mag je een stukje methode geven, geen heel opstel.
 - Max 4 zinnen. Geen emoji.`;
 
 export async function generateFollowup(input: {
