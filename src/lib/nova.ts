@@ -367,7 +367,7 @@ export function lookupNova(input: {
   else if (paragraphN) bits.push(`Paragraaf ${paragraphN}.`);
   if (question) bits.push(`Opdracht ${question}.`);
   bits.push(
-    "Stap 1: verwijs naar deze Nova-plek met ÉÉN pagina + ongeveer waar (boven/midden/onder of alinea). Geen paginabereik. Niet alleen 'heb je gelezen?'. Antwoord later in Nova-stijl.",
+    "Stap 1: begin met 'Heb je de tekst goed gelezen? Kijk …' en verwijs naar deze Nova-plek met ÉÉN pagina + ongeveer waar (boven/midden/onder of alinea). Geen paginabereik. Antwoord later in Nova-stijl.",
   );
   return bits.join(" ");
 }
