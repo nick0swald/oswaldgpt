@@ -55,10 +55,10 @@ export function StudentApp() {
   const [deeperCount, setDeeperCount] = useState(0);
   const [deeperLoading, setDeeperLoading] = useState(false);
   const [deeperExtras, setDeeperExtras] = useState<string[]>([]);
-  const [practice, setPractice] = useState<PracticeQuestionView | null>(null);
+  const [practiceList, setPracticeList] = useState<PracticeQuestionView[]>([]);
   const [practiceCount, setPracticeCount] = useState(0);
   const [practiceLoading, setPracticeLoading] = useState(false);
-  const [practiceAnswerShown, setPracticeAnswerShown] = useState(false);
+  const [practiceRevealed, setPracticeRevealed] = useState<Record<number, boolean>>({});
   const [winkFollowups, setWinkFollowups] = useState<{ question: string; reply: string }[]>([]);
   const [winkAsk, setWinkAsk] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -132,9 +132,9 @@ export function StudentApp() {
       setOtherMessage("");
       setDeeperExtras([]);
       setDeeperCount(0);
-      setPractice(null);
+      setPracticeList([]);
       setPracticeCount(0);
-      setPracticeAnswerShown(false);
+      setPracticeRevealed({});
       if (res.kind === "other") {
         setOtherMessage(res.message);
         setScreen("other");
@@ -208,16 +208,16 @@ export function StudentApp() {
     setDeeperExtras([]);
     setDeeperCount(0);
     setDeeperLoading(false);
-    setPractice(null);
+    setPracticeList([]);
     setPracticeCount(0);
     setPracticeLoading(false);
-    setPracticeAnswerShown(false);
+    setPracticeRevealed({});
     setSessionId("");
     sessionStorage.removeItem(SESSION_KEY);
     setScreen("form");
   }
 
-  const MAX_EXTRA = 4;
+  const MAX_EXTRA = 3;
 
   async function onDeeperExplanation() {
     if (!answer || deeperCount >= MAX_EXTRA || deeperLoading) return;
@@ -260,9 +260,13 @@ export function StudentApp() {
         toast.error(res.error);
         return;
       }
-      setPractice(res.practice);
+      const item = res.practice;
+      if (!item?.question) {
+        toast.error("Oefenvraag maken lukte niet. Probeer het nog eens.");
+        return;
+      }
+      setPracticeList((prev) => [...prev, item]);
       setPracticeCount((n) => n + 1);
-      setPracticeAnswerShown(false);
     } catch {
       toast.error("Oefenvraag maken lukte niet. Probeer het nog eens.");
     } finally {
@@ -493,17 +497,19 @@ export function StudentApp() {
                 <p className="mt-2 whitespace-pre-line text-sm leading-relaxed">{text}</p>
               </div>
             ))}
-            {practice ? (
-              <div className="grid gap-3 rounded-[var(--radius-lg)] bg-surface px-4 py-4">
-                <p className="text-xs font-bold uppercase tracking-wide text-leaf">Oefenvraag</p>
+            {practiceList.map((practice, i) => (
+              <div key={`practice-${i}-${practice.question.slice(0, 24)}`} className="grid gap-3 rounded-[var(--radius-lg)] bg-surface px-4 py-4">
+                <p className="text-xs font-bold uppercase tracking-wide text-leaf">
+                  Oefenvraag{practiceList.length > 1 ? ` (${i + 1})` : ""}
+                </p>
                 <p className="whitespace-pre-line text-sm leading-relaxed text-fg">{practice.question}</p>
-                {!practiceAnswerShown ? (
+                {!practiceRevealed[i] ? (
                   <Button
                     type="button"
                     size="md"
                     variant="paper"
                     className="w-fit"
-                    onClick={() => setPracticeAnswerShown(true)}
+                    onClick={() => setPracticeRevealed((prev) => ({ ...prev, [i]: true }))}
                   >
                     Toon oefenantwoord
                   </Button>
@@ -528,7 +534,7 @@ export function StudentApp() {
                   </div>
                 )}
               </div>
-            ) : null}
+            ))}
             <div className="grid gap-2">
               {deeperCount < MAX_EXTRA ? (
                 <Button
