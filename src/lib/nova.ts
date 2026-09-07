@@ -367,7 +367,7 @@ export function lookupNova(input: {
   else if (paragraphN) bits.push(`Paragraaf ${paragraphN}.`);
   if (question) bits.push(`Opdracht ${question}.`);
   bits.push(
-    "Stap 1: verwijs naar deze Nova-plek en noem de pagina als die in het antwoordenboek-blok staat. Niet alleen 'heb je gelezen?'. Antwoord later in Nova-stijl. Geen hele bladzijde overnemen.",
+    "Stap 1: verwijs naar deze Nova-plek met ÉÉN pagina + ongeveer waar (boven/midden/onder of alinea). Geen paginabereik. Niet alleen 'heb je gelezen?'. Antwoord later in Nova-stijl.",
   );
   return bits.join(" ");
 }
