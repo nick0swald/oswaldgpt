@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Outfit", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Outfit", "Segoe UI", system-ui, sans-serif;
+  --color-bg: #09090b;
+  --color-surface: #141418;
+  --color-paper: #1f1f26;
+  --color-fg: #fafafa;
+  --color-ink: #fafafa;
+  --color-brand: #fffc00;
+  --color-muted: #a3a3ad;
+  --color-primary: #fffc00;
+  --color-primary-fg: #09090b;
+  --color-border: #2a2a32;
+  --color-leaf: #00f2ea;
+  --color-warn: #ff4d6d;
+  --radius-xs: 0.125rem;
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --motion-quick: 0.15s;
+  --motion-fast: 0.25s;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  h1,
+  h2,
+  h3 {
+    color: var(--color-fg);
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  input[type="file"] {
+    display: none;
+  }
+}
+
+@layer utilities {
+  .story-row {
+    scrollbar-width: none;
+  }
+  .story-row::-webkit-scrollbar {
+    display: none;
+  }
+  .nav-safe {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
