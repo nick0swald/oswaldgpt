@@ -8,7 +8,7 @@ import {
   STEP_TITLES,
 } from "@/lib/defaults";
 import { generateFollowup, generateHelp, type HelpPayload } from "@/lib/ai.server";
-import { lookupNova } from "@/lib/nova";
+import { lookupNova, parseNovaFromText } from "@/lib/nova";
 import type { AnswerView, DayStat, FollowUp, StepView, SubmitResult, WinkView } from "@/lib/types";
 
 export type { AnswerView, StepView };
@@ -118,22 +118,22 @@ export async function listRosterNames(): Promise<string[]> {
 
 export async function startSession(input: {
   name?: string;
-  classCode: string;
+  classCode?: string;
 }): Promise<{ ok: true; sessionId: string } | { ok: false; error: string }> {
-  if (!CLASS_CODES.includes(input.classCode as (typeof CLASS_CODES)[number])) {
-    return { ok: false, error: "Kies een klas uit de lijst." };
-  }
+  const classCode = CLASS_CODES.includes(input.classCode as (typeof CLASS_CODES)[number])
+    ? input.classCode!
+    : "";
   const name = cleanOptionalName(input.name);
   if (name === null) {
     return { ok: false, error: "Gebruik alleen letters in de naam, of laat leeg." };
   }
   const id = randomUUID();
-  memory().sessions.set(id, emptySession(id, name, input.classCode));
+  memory().sessions.set(id, emptySession(id, name, classCode));
   try {
     const sql = await getSql();
     await sql`
       insert into sessions (id, student_name, class_code)
-      values (${id}, ${name}, ${input.classCode})
+      values (${id}, ${name}, ${classCode})
     `;
   } catch (err) {
     console.error("[oswald] startSession db", err);
@@ -149,19 +149,29 @@ export async function submitQuestion(input: {
   paragraph?: string;
   questionNo?: string;
 }): Promise<SubmitResult> {
-  const session = await loadSession(input.sessionId);
-  if (!session) return { ok: false, error: "Sessie niet gevonden. Start opnieuw." };
+  let session = await loadSession(input.sessionId);
+  if (!session) {
+    const started = await startSession({});
+    if (!started.ok) return started;
+    session = await loadSession(started.sessionId);
+    if (!session) {
+      const created = emptySession(started.sessionId, "", "");
+      memory().sessions.set(created.id, created);
+      session = created;
+    }
+  }
 
   const text = input.text?.trim() ?? "";
   const image = input.imageDataUrl?.trim();
+  const parsed = parseNovaFromText(text);
   const novaContext = lookupNova({
     classCode: session.class_code,
-    chapter: input.chapter,
-    paragraph: input.paragraph,
-    question: input.questionNo,
+    chapter: input.chapter || parsed.chapter,
+    paragraph: input.paragraph || parsed.paragraph,
+    question: input.questionNo || parsed.question,
   });
-  if (!text && !image && !novaContext) {
-    return { ok: false, error: "Plak de vraag, snap 'm, of kies hoofdstuk en vraag." };
+  if (!text && !image) {
+    return { ok: false, error: "Plak de vraag of snap 'm." };
   }
   if (image && image.length > 1_500_000) {
     return { ok: false, error: "De foto is te groot. Maak een scherpere, kleinere foto." };
@@ -231,6 +241,7 @@ export async function submitQuestion(input: {
       return {
         ok: true,
         kind: "other",
+        sessionId: session.id,
         message:
           "Dit is geen NaSk. Oswald helpt alleen bij natuurkunde en scheikunde van de les. Geen antwoord op andere vakken.",
       };
@@ -245,14 +256,150 @@ export async function submitQuestion(input: {
         searchQuery:
           generated.help.search_query.trim() || generated.help.question_short.trim() || text,
       };
-      return { ok: true, kind: "wink", wink };
+      return { ok: true, kind: "wink", sessionId: session.id, wink };
     }
 
-    return { ok: true, kind: "nask", step: toStepView(generated.help, 1, 0) };
+    const steps = allStepsOf(generated.help);
+    return {
+      ok: true,
+      kind: "nask",
+      sessionId: session.id,
+      step: steps[0] ?? toStepView(generated.help, 1, 0),
+      steps,
+      answer: {
+        questionShort: generated.help.question_short,
+        modelAnswer: generated.help.answer.model_answer,
+        explanation: generated.help.answer.explanation,
+      },
+    };
   } catch (err) {
     console.error("[oswald] submit failed", err);
     return { ok: false, error: "Hulp ophalen lukte niet. Probeer het nog eens." };
   }
+}
+
+export async function askHelp(input: {
+  name?: string;
+  classCode?: string;
+  text?: string;
+  imageDataUrl?: string;
+}): Promise<SubmitResult> {
+  const classCode = CLASS_CODES.includes(input.classCode as (typeof CLASS_CODES)[number])
+    ? input.classCode!
+    : "";
+  const name = cleanOptionalName(input.name);
+  if (name === null) {
+    return { ok: false, error: "Gebruik alleen letters in de naam, of laat leeg." };
+  }
+
+  const text = input.text?.trim() ?? "";
+  const image = input.imageDataUrl?.trim();
+  if (!text && !image) {
+    return { ok: false, error: "Plak de vraag of snap 'm." };
+  }
+  if (image && image.length > 1_500_000) {
+    return { ok: false, error: "De foto is te groot. Maak een scherpere, kleinere foto." };
+  }
+  if (image && !image.startsWith("data:image/")) {
+    return { ok: false, error: "Dit bestand is geen foto." };
+  }
+
+  const parsed = parseNovaFromText(text);
+  const novaContext = lookupNova({
+    classCode,
+    chapter: parsed.chapter,
+    paragraph: parsed.paragraph,
+    question: parsed.question,
+  });
+
+  const generated = await generateHelp({
+    text: text || undefined,
+    imageDataUrl: image,
+    novaContext: novaContext || undefined,
+  });
+  if (!generated.ok) return generated;
+  if (novaContext) {
+    generated.help.topic = "nask";
+    generated.help.readable = true;
+  }
+  if (!generated.help.readable) {
+    return {
+      ok: false,
+      error:
+        generated.help.question_short?.trim() ||
+        "Ik kan de vraag niet goed lezen. Typ de vraag of maak een scherpere foto.",
+    };
+  }
+
+  const id = randomUUID();
+  const topic = generated.help.topic ?? "nask";
+  const isWink = topic === "wink";
+  const isOther = topic === "other";
+  const row = emptySession(id, name, classCode);
+  row.submitted_question = true;
+  row.questions_count = 1;
+  row.steps_shown = isOther || isWink ? 0 : 1;
+  row.answer_shown = isWink;
+  row.help_json = JSON.stringify(generated.help);
+  row.question_submitted_at = nowIso();
+  row.answer_shown_at = isWink ? nowIso() : null;
+  memory().sessions.set(id, row);
+
+  try {
+    const sql = await getSql();
+    await sql`
+      insert into sessions (id, student_name, class_code, submitted_question, questions_count,
+        steps_shown, extra_tips, extra_mask, answer_shown, help_json,
+        question_submitted_at, answer_shown_at, last_active_at)
+      values (
+        ${id}, ${name}, ${classCode}, true, 1,
+        ${isOther || isWink ? 0 : 1}, 0, 0, ${isWink}, ${row.help_json},
+        now(), ${isWink ? nowIso() : null}, now()
+      )
+    `;
+  } catch (err) {
+    console.error("[oswald] askHelp save", err);
+  }
+
+  if (isOther) {
+    return {
+      ok: true,
+      kind: "other",
+      sessionId: id,
+      message:
+        "Dit is geen NaSk. Oswald helpt alleen bij natuurkunde en scheikunde van de les. Geen antwoord op andere vakken.",
+    };
+  }
+  if (isWink) {
+    return {
+      ok: true,
+      kind: "wink",
+      sessionId: id,
+      wink: {
+        questionShort: generated.help.question_short,
+        wink:
+          generated.help.answer.explanation.trim() ||
+          "Dit is wel natuurkunde, maar niet van onze les. Knipoog.",
+        simpleAnswer: generated.help.answer.model_answer.trim(),
+        searchQuery:
+          generated.help.search_query.trim() || generated.help.question_short.trim() || text,
+      },
+    };
+  }
+
+  const steps = allStepsOf(generated.help);
+  return {
+    ok: true,
+    kind: "nask",
+    sessionId: id,
+    step: steps[0] ?? toStepView(generated.help, 1, 0),
+    steps,
+    answer: {
+      questionShort: generated.help.question_short,
+      modelAnswer: generated.help.answer.model_answer,
+      explanation: generated.help.answer.explanation,
+    },
+  };
 }
 
 export async function advanceStep(
@@ -318,59 +465,63 @@ export async function extraTip(
 export async function askFollowup(
   sessionId: string,
   question: string,
+  fallback?: { questionShort?: string; shownHints?: string[] },
 ): Promise<{ ok: true; followup: FollowUp } | { ok: false; error: string }> {
-  const session = await loadSession(sessionId);
-  if (!session) return { ok: false, error: "Sessie niet gevonden." };
-  const help = readHelp(session);
-  if (!help || session.steps_shown < 1) {
-    return { ok: false, error: "Vraag eerst de eerste hint." };
-  }
-  if (help.topic === "other" || help.topic === "wink") {
-    return { ok: false, error: "Bij deze vraag kan Oswald geen wedervraag." };
-  }
   const asked = question.trim();
   if (asked.length < 2) return { ok: false, error: "Typ je vraag." };
   if (asked.length > 400) return { ok: false, error: "Iets korter, max een paar zinnen." };
-  const existing = help.followups ?? [];
+
+  const session = await loadSession(sessionId);
+  const help = session ? readHelp(session) : null;
+  if (help && (help.topic === "other" || help.topic === "wink")) {
+    return { ok: false, error: "Bij deze vraag kan Oswald geen wedervraag." };
+  }
+  const existing = help?.followups ?? [];
   if (existing.length >= MAX_FOLLOWUPS) {
     return { ok: false, error: "Genoeg vragen. Probeer nu zelf, of toon het antwoord." };
   }
 
   const shown: string[] = [];
-  const total = Math.min(session.steps_shown, hintCountOf(help));
-  const keys = ["step1", "step2", "step3"] as const;
-  for (let i = 1; i <= total; i += 1) {
-    const block = help[keys[i - 1]];
-    if (block.help) shown.push(block.help);
-    if (block.tip) shown.push(block.tip);
+  if (help && session) {
+    const total = Math.min(session.steps_shown, hintCountOf(help));
+    const keys = ["step1", "step2", "step3"] as const;
+    for (let i = 1; i <= total; i += 1) {
+      const block = help[keys[i - 1]];
+      if (block.help) shown.push(block.help);
+      if (block.tip) shown.push(block.tip);
+    }
+  } else if (fallback?.shownHints?.length) {
+    shown.push(...fallback.shownHints);
   }
 
   const generated = await generateFollowup({
-    questionShort: help.question_short,
+    questionShort: help?.question_short || fallback?.questionShort || "",
     shownHints: shown,
     followup: asked,
   });
   if (!generated.ok) return generated;
 
   const followup: FollowUp = { question: asked, reply: generated.reply };
-  const next = [...existing, followup];
-  const stored = { ...help, followups: next };
-  try {
-    const sql = await getSql();
-    await sql`
-      update sessions
-      set help_json = ${JSON.stringify(stored)},
-          extra_tips = extra_tips + 1,
-          last_active_at = now()
-      where id = ${session.id}
-    `;
-  } catch (err) {
-    console.error("[oswald] followup db", err);
+  if (session && help) {
+    const next = [...existing, followup];
+    const stored = { ...help, followups: next };
+    try {
+      const sql = await getSql();
+      await sql`
+        update sessions
+        set help_json = ${JSON.stringify(stored)},
+            extra_tips = extra_tips + 1,
+            last_active_at = now()
+        where id = ${session.id}
+      `;
+    } catch (err) {
+      console.error("[oswald] followup db", err);
+    }
+    patchMem(session.id, {
+      help_json: JSON.stringify(stored),
+      extra_tips: session.extra_tips + 1,
+    });
   }
-  patchMem(session.id, {
-    help_json: JSON.stringify(stored),
-    extra_tips: session.extra_tips + 1,
-  });
   return { ok: true, followup };
 }
 
@@ -537,6 +688,15 @@ function readHelp(session: SessionRow): (HelpPayload & { followups?: FollowUp[] 
 function hintCountOf(help: HelpPayload): 1 | 2 | 3 {
   const n = help.hint_count;
   return n === 1 || n === 2 || n === 3 ? n : 3;
+}
+
+function allStepsOf(help: HelpPayload): StepView[] {
+  const total = hintCountOf(help);
+  const steps: StepView[] = [];
+  for (let i = 1; i <= total; i += 1) {
+    steps.push(toStepView(help, i as 1 | 2 | 3, 0));
+  }
+  return steps;
 }
 
 function toStepView(help: HelpPayload, step: 1 | 2 | 3, extraMask: number): StepView {

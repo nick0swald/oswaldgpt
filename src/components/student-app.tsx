@@ -13,13 +13,11 @@ import {
   SESSION_KEY,
   SHOW_PLEDGE,
 } from "@/lib/defaults";
-import { chaptersForClass } from "@/lib/nova";
 import {
   advanceStepFn,
   askFollowupFn,
+  askHelpFn,
   revealAnswerFn,
-  startSessionFn,
-  submitQuestionFn,
 } from "@/lib/oswald.functions";
 import type { AnswerView, FollowUp, StepView, WinkView } from "@/lib/types";
 import { compressImage, searchLinks } from "@/lib/utils";
@@ -32,14 +30,12 @@ export function StudentApp() {
   const [daBest, setDaBest] = useState(false);
   const [name, setName] = useState("");
   const [classCode, setClassCode] = useState("");
-  const [chapter, setChapter] = useState("");
-  const [paragraph, setParagraph] = useState("");
-  const [questionNo, setQuestionNo] = useState("");
   const [sessionId, setSessionId] = useState("");
   const [loading, setLoading] = useState(false);
   const [question, setQuestion] = useState("");
   const [image, setImage] = useState<string | null>(null);
   const [hints, setHints] = useState<StepView[]>([]);
+  const [packedSteps, setPackedSteps] = useState<StepView[]>([]);
   const [step, setStep] = useState<StepView | null>(null);
   const [answer, setAnswer] = useState<AnswerView | null>(null);
   const [wink, setWink] = useState<WinkView | null>(null);
@@ -83,46 +79,31 @@ export function StudentApp() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!classCode) {
-      toast.error("Kies je klas.");
-      return;
-    }
-    if (!question.trim() && !image && !(chapter && questionNo.trim())) {
-      toast.error("Plak de vraag, snap 'm, of kies hoofdstuk en vraag.");
+    if (!question.trim() && !image) {
+      toast.error("Plak de vraag of snap 'm.");
       return;
     }
     setLoading(true);
     try {
-      const started = await startSessionFn({
-        data: { name: name.trim() || undefined, classCode },
-      });
-      if (!started.ok) {
-        toast.error(started.error);
-        return;
-      }
-      sessionStorage.setItem(SESSION_KEY, started.sessionId);
-      sessionStorage.setItem(NAME_KEY, name.trim());
-      sessionStorage.setItem(CLASS_KEY, classCode);
-      setSessionId(started.sessionId);
-
       const payload: {
-        sessionId: string;
+        name?: string;
+        classCode?: string;
         text?: string;
         imageDataUrl?: string;
-        chapter?: string;
-        paragraph?: string;
-        questionNo?: string;
-      } = { sessionId: started.sessionId };
+      } = {};
+      if (name.trim()) payload.name = name.trim();
+      if (classCode) payload.classCode = classCode;
       if (question.trim()) payload.text = question.trim();
       if (image) payload.imageDataUrl = image;
-      if (chapter) payload.chapter = chapter;
-      if (paragraph) payload.paragraph = paragraph;
-      if (questionNo.trim()) payload.questionNo = questionNo.trim();
-      const res = await submitQuestionFn({ data: payload });
+      const res = await askHelpFn({ data: payload });
       if (!res.ok) {
         toast.error(res.error);
         return;
       }
+      sessionStorage.setItem(SESSION_KEY, res.sessionId);
+      sessionStorage.setItem(NAME_KEY, name.trim());
+      sessionStorage.setItem(CLASS_KEY, classCode);
+      setSessionId(res.sessionId);
       setHints([]);
       setStep(null);
       setAnswer(null);
@@ -140,8 +121,10 @@ export function StudentApp() {
         setScreen("wink");
         return;
       }
-      setStep(res.step);
-      setHints([res.step]);
+      setAnswer(res.answer);
+      setStep(res.steps[0] ?? res.step);
+      setHints(res.steps[0] ? [res.steps[0]] : [res.step]);
+      setPackedSteps(res.steps);
       setScreen("help");
     } catch {
       toast.error("Hulp ophalen lukte niet. Probeer het nog eens.");
@@ -151,26 +134,27 @@ export function StudentApp() {
   }
 
   async function onAdvance() {
+    if (!step) return;
+    const next = packedSteps.find((s) => s.step === step.step + 1);
+    if (next) {
+      setStep(next);
+      setHints((prev) => [...prev.filter((h) => h.step !== next.step), next]);
+      if (sessionId) void advanceStepFn({ data: { sessionId } }).catch(() => undefined);
+      return;
+    }
     if (!sessionId) return;
-    setLoading(true);
     try {
       const res = await advanceStepFn({ data: { sessionId } });
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
-      }
+      if (!res.ok) return;
       setStep(res.step);
       setHints((prev) => [...prev.filter((h) => h.step !== res.step.step), res.step]);
     } catch {
-      toast.error("Volgende hint lukte niet.");
-    } finally {
-      setLoading(false);
+      /* ignore — hints staan al op de pagina */
     }
   }
 
   async function onFollowup(e: FormEvent) {
     e.preventDefault();
-    if (!sessionId) return;
     const asked = followup.trim();
     if (asked.length < 2) {
       toast.error("Typ je wedervraag.");
@@ -178,7 +162,14 @@ export function StudentApp() {
     }
     setLoading(true);
     try {
-      const res = await askFollowupFn({ data: { sessionId, question: asked } });
+      const res = await askFollowupFn({
+        data: {
+          sessionId: sessionId || undefined,
+          question: asked,
+          questionShort: step?.questionShort || hints[0]?.questionShort,
+          shownHints: hints.flatMap((h) => [h.help, h.tip].filter(Boolean)),
+        },
+      });
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -193,20 +184,18 @@ export function StudentApp() {
   }
 
   async function onReveal() {
+    if (answer) setScreen("answer");
     if (!sessionId) return;
-    setLoading(true);
     try {
       const res = await revealAnswerFn({ data: { sessionId } });
-      if (!res.ok) {
+      if (res.ok) {
+        setAnswer(res.answer);
+        setScreen("answer");
+      } else if (!answer) {
         toast.error(res.error);
-        return;
       }
-      setAnswer(res.answer);
-      setScreen("answer");
     } catch {
-      toast.error("Antwoord ophalen lukte niet.");
-    } finally {
-      setLoading(false);
+      if (!answer) toast.error("Antwoord ophalen lukte niet.");
     }
   }
 
@@ -215,6 +204,7 @@ export function StudentApp() {
     setImage(null);
     setStep(null);
     setHints([]);
+    setPackedSteps([]);
     setAnswer(null);
     setWink(null);
     setOtherMessage("");
@@ -252,10 +242,6 @@ export function StudentApp() {
                 Hulp bij je NaSk-vraag — eerst zelf nadenken.
                 {daBest ? " Oswald is da best." : ""}
               </p>
-              <p className="mt-2 text-sm leading-relaxed text-muted">
-                Het beste bij Nova-opdrachten en toetsen. Een begrip, formule of “hoe maak ik
-                een samenvatting?” kan ook.
-              </p>
             </header>
 
             <div>
@@ -264,7 +250,7 @@ export function StudentApp() {
                 id="vraag"
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
-                placeholder="Plak een opdracht, stel een NaSk-vraag, of kies hst / par / vraag."
+                placeholder="Plak de vraag, of typ bijv. hst 9 par 1 vraag 3."
               />
             </div>
 
@@ -308,99 +294,6 @@ export function StudentApp() {
               Snap je vraag
             </Button>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="min-w-0">
-                <Label htmlFor="klas">Klas</Label>
-                <Select
-                  id="klas"
-                  value={classCode}
-                  required
-                  onChange={(e) => {
-                    const next = e.target.value;
-                    setClassCode(next);
-                    if (
-                      chapter &&
-                      next &&
-                      !chaptersForClass(next).some((c) => String(c.n) === chapter)
-                    ) {
-                      setChapter("");
-                      setParagraph("");
-                    }
-                  }}
-                >
-                  <option value="">Kies klas</option>
-                  {CLASSES.map((c) => (
-                    <option key={c.code} value={c.code}>
-                      {c.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="min-w-0">
-                <Label htmlFor="naam">Jouw naam</Label>
-                <Input
-                  id="naam"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  maxLength={40}
-                  autoComplete="nickname"
-                  placeholder="Mag leeg"
-                  className="border-2 border-[#4d9fff] focus-visible:border-[#4d9fff] focus-visible:ring-[#4d9fff]/50"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2">
-              <div className="min-w-0">
-                <Label htmlFor="hst">Hst</Label>
-                <Select
-                  id="hst"
-                  value={chapter}
-                  onChange={(e) => {
-                    setChapter(e.target.value);
-                    setParagraph("");
-                  }}
-                >
-                  <option value="">{classCode ? "Hst" : "Eerst klas"}</option>
-                  {(classCode ? chaptersForClass(classCode) : []).map((c) => (
-                    <option key={c.n} value={String(c.n)}>
-                      {c.n} {c.title}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="min-w-0">
-                <Label htmlFor="par">Par</Label>
-                <Select
-                  id="par"
-                  value={paragraph}
-                  onChange={(e) => setParagraph(e.target.value)}
-                  disabled={!chapter}
-                >
-                  <option value="">Par</option>
-                  {(classCode && chapter
-                    ? chaptersForClass(classCode).find((c) => String(c.n) === chapter)?.paragraphs ?? []
-                    : []
-                  ).map((p) => (
-                    <option key={p.n} value={String(p.n)}>
-                      {p.n} {p.title}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="min-w-0">
-                <Label htmlFor="opdracht">Vraag</Label>
-                <Input
-                  id="opdracht"
-                  value={questionNo}
-                  onChange={(e) => setQuestionNo(e.target.value)}
-                  maxLength={12}
-                  placeholder="3a"
-                  inputMode="text"
-                />
-              </div>
-            </div>
-
             <Button
               type="submit"
               size="lg"
@@ -414,6 +307,36 @@ export function StudentApp() {
               </span>
               <ArrowRight />
             </Button>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="min-w-0">
+                <Label htmlFor="klas">Klas · mag leeg</Label>
+                <Select
+                  id="klas"
+                  value={classCode}
+                  onChange={(e) => setClassCode(e.target.value)}
+                >
+                  <option value="">Mag leeg</option>
+                  {CLASSES.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="min-w-0">
+                <Label htmlFor="naam">Naam · mag leeg</Label>
+                <Input
+                  id="naam"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  maxLength={40}
+                  autoComplete="nickname"
+                  placeholder="Mag leeg"
+                  className="border-2 border-[#4d9fff] focus-visible:border-[#4d9fff] focus-visible:ring-[#4d9fff]/50"
+                />
+              </div>
+            </div>
           </form>
         ) : null}
 

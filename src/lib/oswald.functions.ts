@@ -1,25 +1,33 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { CLASS_CODES } from "@/lib/defaults";
 
 const sessionIdSchema = z.string().min(8).max(80);
 const pinSchema = z.string().min(1).max(64);
-const classSchema = z
-  .string()
-  .refine((value): value is (typeof CLASS_CODES)[number] =>
-    (CLASS_CODES as readonly string[]).includes(value),
-  );
 
 export const listNamesFn = createServerFn({ method: "GET" }).handler(async () => {
   const { listRosterNames } = await import("./oswald.server");
   return { names: await listRosterNames() };
 });
 
+export const askHelpFn = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      name: z.string().max(40).optional(),
+      classCode: z.string().max(12).optional(),
+      text: z.string().max(4000).optional(),
+      imageDataUrl: z.string().max(1_500_000).optional(),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const { askHelp } = await import("./oswald.server");
+    return askHelp(data);
+  });
+
 export const startSessionFn = createServerFn({ method: "POST" })
   .validator(
     z.object({
       name: z.string().max(40).optional(),
-      classCode: classSchema,
+      classCode: z.string().max(12).optional(),
     }),
   )
   .handler(async ({ data }) => {
@@ -60,13 +68,18 @@ export const extraTipFn = createServerFn({ method: "POST" })
 export const askFollowupFn = createServerFn({ method: "POST" })
   .validator(
     z.object({
-      sessionId: sessionIdSchema,
+      sessionId: z.string().max(80).optional(),
       question: z.string().min(1).max(400),
+      questionShort: z.string().max(400).optional(),
+      shownHints: z.array(z.string().max(800)).max(8).optional(),
     }),
   )
   .handler(async ({ data }) => {
     const { askFollowup } = await import("./oswald.server");
-    return askFollowup(data.sessionId, data.question);
+    return askFollowup(data.sessionId || "none", data.question, {
+      questionShort: data.questionShort,
+      shownHints: data.shownHints,
+    });
   });
 
 export const revealAnswerFn = createServerFn({ method: "POST" })

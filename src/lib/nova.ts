@@ -267,6 +267,7 @@ const SERIES: Record<NovaSeries, { book: string; chapters: NovaChapter[] }> = {
 export function seriesForClass(classCode: string): NovaSeries {
   if (classCode === "4GT") return "gt4";
   if (classCode.startsWith("3")) return "gt3";
+  if (classCode.startsWith("2")) return "kgt12";
   return "kgt12";
 }
 
@@ -274,8 +275,43 @@ export function chaptersForClass(classCode: string): NovaChapter[] {
   return SERIES[seriesForClass(classCode)].chapters;
 }
 
+/** Haalt hst / par / vraag uit vrije tekst van de leerling. */
+export function parseNovaFromText(text: string): {
+  chapter?: string;
+  paragraph?: string;
+  question?: string;
+} {
+  const t = text.toLowerCase().replace(/[,;]/g, " ");
+  if (!t.trim()) return {};
+
+  let chapter: string | undefined;
+  let paragraph: string | undefined;
+  let question: string | undefined;
+
+  const h =
+    t.match(/(?:hoofdstuk|hst\.?)\s*(\d{1,2})\b/) ?? t.match(/(?:^|\s)h\s?(\d{1,2})\b/);
+  if (h) chapter = h[1];
+
+  const p = t.match(/(?:paragraaf|par\.?|§)\s*(\d{1,2})\b/);
+  if (p) paragraph = p[1];
+
+  const q = t.match(/(?:vraagnummer|opdracht|vraag|opdr\.?)\s*(\d{1,2}[a-z]?)\b/i);
+  if (q) question = q[1];
+
+  if (!chapter) {
+    const dotted = t.match(/\b(\d{1,2})\.(\d{1,2})(?:\.(\d{1,2}[a-z]?))?\b/);
+    if (dotted) {
+      chapter = dotted[1];
+      paragraph = paragraph ?? dotted[2];
+      if (dotted[3]) question = question ?? dotted[3];
+    }
+  }
+
+  return { chapter, paragraph, question };
+}
+
 export function lookupNova(input: {
-  classCode: string;
+  classCode?: string;
   chapter?: string;
   paragraph?: string;
   question?: string;
@@ -285,13 +321,35 @@ export function lookupNova(input: {
   const question = input.question?.trim() ?? "";
   if (!chapterN && !paragraphN && !question) return "";
 
-  const series = SERIES[seriesForClass(input.classCode)];
-  const chapter = series.chapters.find((c) => c.n === chapterN);
+  const classCode = input.classCode?.trim() ?? "";
+  const knownClass = Boolean(classCode && classCode !== "onbekend");
+  const seriesKey = knownClass
+    ? seriesForClass(classCode)
+    : chapterN && chapterN >= 9
+      ? "gt4"
+      : undefined;
+  const series = seriesKey ? SERIES[seriesKey] : undefined;
+  const chapter = series?.chapters.find((c) => c.n === chapterN);
   const paragraph = chapter?.paragraphs.find((p) => p.n === paragraphN);
 
-  const bits = [`Nova-lesstof: ${series.book}.`];
+  const bits: string[] = [];
+  if (series) bits.push(`Nova-lesstof: ${series.book}.`);
+  else if (chapterN) {
+    const hits = Object.values(SERIES).flatMap((s) =>
+      s.chapters
+        .filter((c) => c.n === chapterN)
+        .map((c) => `${s.book}: hoofdstuk ${c.n} ${c.title}`),
+    );
+    if (hits.length) {
+      bits.push(`Nova-plek zonder klas. Kan dit zijn: ${hits.join(" / ")}.`);
+    } else {
+      bits.push("Nova-opdracht, klas onbekend.");
+    }
+  } else {
+    bits.push("Nova-opdracht, klas onbekend.");
+  }
   if (chapter) bits.push(`Hoofdstuk ${chapter.n} ${chapter.title}.`);
-  else if (chapterN) bits.push(`Hoofdstuk ${chapterN}.`);
+  else if (chapterN && series) bits.push(`Hoofdstuk ${chapterN}.`);
   if (paragraph) bits.push(`Paragraaf ${paragraph.n} ${paragraph.title}.`);
   else if (paragraphN) bits.push(`Paragraaf ${paragraphN}.`);
   if (question) bits.push(`Opdracht ${question}.`);

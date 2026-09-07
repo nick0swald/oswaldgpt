@@ -82,9 +82,9 @@ Als topic "nask":
 - hint_count 1–3. Nooit de uitkomst of het hele recept in stap 1.
 - answer.model_answer: bij een som het modelantwoord (Nova-stijl). Bij toets-hulp/samenvatting: een kort bruikbaar recept (max 5 zinnen).
 - search_query: "".
-- Als de leerling een Nova-plek geeft (hst/par/opdracht): topic is nask. Gebruik die plek.
+- Als de leerling een Nova-plek typt (hst 9, par 1, vraag 3, of 9.1.3): topic is nask. Gebruik die plek.
 
-Als de leerling een Nova-hoofdstuk/paragraaf/opdracht meestuurt, is het lesstof. Geen wink. Geen other.
+Als de leerling een Nova-hoofdstuk/paragraaf/opdracht typt in het tekstveld, is het lesstof. Geen wink. Geen other.
 
 Als topic "wink":
 - hint_count 1. Stappen mogen kort en leeg-achtig.

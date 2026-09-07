@@ -25,9 +25,16 @@ export type WinkView = {
 };
 
 export type SubmitResult =
-  | { ok: true; kind: "nask"; step: StepView }
-  | { ok: true; kind: "wink"; wink: WinkView }
-  | { ok: true; kind: "other"; message: string }
+  | {
+      ok: true;
+      kind: "nask";
+      sessionId: string;
+      step: StepView;
+      steps: StepView[];
+      answer: AnswerView;
+    }
+  | { ok: true; kind: "wink"; sessionId: string; wink: WinkView }
+  | { ok: true; kind: "other"; sessionId: string; message: string }
   | { ok: false; error: string };
 
 export type FollowUp = {
