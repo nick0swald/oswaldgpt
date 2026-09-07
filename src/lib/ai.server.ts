@@ -83,6 +83,8 @@ Als topic "nask":
 - answer.model_answer: bij een som het modelantwoord (Nova-stijl). Bij toets-hulp/samenvatting: een kort bruikbaar recept (max 5 zinnen).
 - search_query: "".
 - Als de leerling een Nova-plek typt (hst 9, par 1, vraag 3, of 9.1.3): topic is nask. Gebruik die plek.
+- Als de leerling ALLEEN een plek typt (hst/par/vraag), is dat de opdracht. Geen samenvatting van het hoofdstuk, tenzij ze om een samenvatting vragen.
+- Als er een blok ANTWOORDENBOEK bij zit: dat is het Nova-antwoordenboek. Gebruik het voor answer.model_answer. In hints NOOIT de uitkomst, het getal of het modelantwoord overnemen. Stap 1 blijft lezen/duwen.
 
 Als de leerling een Nova-hoofdstuk/paragraaf/opdracht typt in het tekstveld, is het lesstof. Geen wink. Geen other.
 
@@ -108,13 +110,14 @@ export async function generateHelp(input: {
   text?: string;
   imageDataUrl?: string;
   novaContext?: string;
+  bookExcerpt?: string;
 }): Promise<{ ok: true; help: HelpPayload } | { ok: false; error: string }> {
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) {
     return { ok: false, error: "Hulp is nu even niet beschikbaar. Probeer het later of vraag je docent." };
   }
 
-  const userText = buildUserText(input.text, input.novaContext);
+  const userText = buildUserText(input.text, input.novaContext, input.bookExcerpt);
   const content: ContentPart[] = [{ type: "text", text: userText }];
   if (input.imageDataUrl) {
     content.push({
@@ -150,6 +153,7 @@ export async function generateHelp(input: {
           input.text ||
           "De leerling stuurde een foto van een NaSk-vraag. De foto kon niet worden gelezen.",
         novaContext: input.novaContext,
+        bookExcerpt: input.bookExcerpt,
       });
     }
     const again = await callModel(apiKey, { ...body, temperature: 0, max_tokens: 1400 });
@@ -184,19 +188,20 @@ async function callModel(
   return parseHelp(json.choices?.[0]?.message?.content ?? "");
 }
 
-function buildUserText(text: string | undefined, novaContext?: string): string {
+function buildUserText(text: string | undefined, novaContext?: string, bookExcerpt?: string): string {
   const trimmed = text?.trim() ?? "";
   const titles = STEP_TITLES.join(" / ");
-  const nova = novaContext?.trim()
-    ? `\n\n${novaContext}\n`
-    : "\n";
+  const nova = novaContext?.trim() ? `\n\n${novaContext}\n` : "\n";
+  const book = bookExcerpt?.trim()
+    ? `\n\nANTWOORDENBOEK (alleen voor jou; niet in hint 1 plakken):\n${bookExcerpt.trim()}\n`
+    : "";
   if (trimmed) {
-    return `Vraag van een VMBO-leerling:${nova}\n${trimmed}\n\nClassificeer (nask / wink / other). Alleen bij nask: hulp zoals Nick Oswald (${titles}). JSON volgens schema.`;
+    return `Vraag van een VMBO-leerling:${nova}${book}\n${trimmed}\n\nDit is hulp bij de opdracht/plek hierboven. Geen samenvatting van het hele hoofdstuk, tenzij de leerling daar om vraagt.\nClassificeer (nask / wink / other). Alleen bij nask: hulp zoals Nick Oswald (${titles}). JSON volgens schema.`;
   }
   if (novaContext?.trim()) {
-    return `De leerling vroeg hulp bij een Nova-opdracht.${nova}\nGeen extra tekst, wel deze plek in het boek. Classificeer als nask. Hulp zoals Nick Oswald (${titles}). JSON volgens schema.`;
+    return `De leerling vroeg hulp bij een Nova-opdracht.${nova}${book}\nGeen extra tekst, wel deze plek in het boek. Classificeer als nask. Hulp zoals Nick Oswald (${titles}). JSON volgens schema.`;
   }
-  return `De leerling stuurde een foto/screenshot. Lees wat er staat. Classificeer (nask / wink / other). Alleen bij nask: hulp zoals Nick Oswald (${titles}). JSON volgens schema.`;
+  return `De leerling stuurde een foto/screenshot. Lees wat er staat.${book} Classificeer (nask / wink / other). Alleen bij nask: hulp zoals Nick Oswald (${titles}). JSON volgens schema.`;
 }
 
 function parseHelp(raw: string): HelpPayload | null {

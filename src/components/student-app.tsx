@@ -310,13 +310,13 @@ export function StudentApp() {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="min-w-0">
-                <Label htmlFor="klas">Klas · mag leeg</Label>
+                <Label htmlFor="klas">Klas</Label>
                 <Select
                   id="klas"
                   value={classCode}
                   onChange={(e) => setClassCode(e.target.value)}
                 >
-                  <option value="">Mag leeg</option>
+                  <option value=""></option>
                   {CLASSES.map((c) => (
                     <option key={c.code} value={c.code}>
                       {c.label}
@@ -325,14 +325,13 @@ export function StudentApp() {
                 </Select>
               </div>
               <div className="min-w-0">
-                <Label htmlFor="naam">Naam · mag leeg</Label>
+                <Label htmlFor="naam">Jouw naam</Label>
                 <Input
                   id="naam"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   maxLength={40}
                   autoComplete="nickname"
-                  placeholder="Mag leeg"
                   className="border-2 border-[#4d9fff] focus-visible:border-[#4d9fff] focus-visible:ring-[#4d9fff]/50"
                 />
               </div>

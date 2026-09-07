@@ -1,0 +1,50 @@
+[
+  {
+    "id": "gt3-a",
+    "series": "gt3",
+    "part": "A",
+    "book": "Nova Nask 1, 3 VMBO-GT deel A",
+    "pages": 256,
+    "chars": 363419
+  },
+  {
+    "id": "gt3-b",
+    "series": "gt3",
+    "part": "B",
+    "book": "Nova Nask 1, 3 VMBO-GT deel B",
+    "pages": 256,
+    "chars": 377448
+  },
+  {
+    "id": "gt4-a",
+    "series": "gt4",
+    "part": "A",
+    "book": "Nova Nask 1, 4 VMBO-GT deel A",
+    "pages": 308,
+    "chars": 408031
+  },
+  {
+    "id": "gt4-b",
+    "series": "gt4",
+    "part": "B",
+    "book": "Nova Nask 1, 4 VMBO-GT deel B",
+    "pages": 300,
+    "chars": 369190
+  },
+  {
+    "id": "kgt12-a",
+    "series": "kgt12",
+    "part": "A",
+    "book": "Nova NaSk 1|2 VMBO-KGT deel A",
+    "pages": 213,
+    "chars": 286275
+  },
+  {
+    "id": "kgt12-b",
+    "series": "kgt12",
+    "part": "B",
+    "book": "Nova NaSk 1|2 VMBO-KGT deel B",
+    "pages": 261,
+    "chars": 338995
+  }
+]

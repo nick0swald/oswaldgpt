@@ -8,12 +8,31 @@ import {
   STEP_TITLES,
 } from "@/lib/defaults";
 import { generateFollowup, generateHelp, type HelpPayload } from "@/lib/ai.server";
-import { lookupNova, parseNovaFromText } from "@/lib/nova";
+import { answerBookExcerpt } from "@/lib/answer-book";
+import { lookupNova, parseNovaFromText, seriesForClass } from "@/lib/nova";
 import type { AnswerView, DayStat, FollowUp, StepView, SubmitResult, WinkView } from "@/lib/types";
 
 export type { AnswerView, StepView };
 
 const NAME_PATTERN = /^[\p{L}][\p{L}\s'.-]*$/u;
+
+function bookContext(input: {
+  classCode?: string;
+  chapter?: string;
+  paragraph?: string;
+  question?: string;
+  query?: string;
+}): string {
+  const classCode = input.classCode?.trim() ?? "";
+  const known = CLASS_CODES.includes(classCode as (typeof CLASS_CODES)[number]);
+  return answerBookExcerpt({
+    series: known ? seriesForClass(classCode) : undefined,
+    chapter: input.chapter,
+    paragraph: input.paragraph,
+    question: input.question,
+    query: input.query,
+  });
+}
 
 function cleanOptionalName(value: string | undefined): string | null {
   const cleaned = (value ?? "").trim().replace(/\s+/g, " ");
@@ -187,6 +206,13 @@ export async function submitQuestion(input: {
     text: text || undefined,
     imageDataUrl: image,
     novaContext: novaContext || undefined,
+    bookExcerpt: bookContext({
+      classCode: session.class_code,
+      chapter: input.chapter || parsed.chapter,
+      paragraph: input.paragraph || parsed.paragraph,
+      question: input.questionNo || parsed.question,
+      query: text,
+    }) || undefined,
   });
   if (!generated.ok) return generated;
   if (novaContext) {
@@ -316,6 +342,13 @@ export async function askHelp(input: {
     text: text || undefined,
     imageDataUrl: image,
     novaContext: novaContext || undefined,
+    bookExcerpt: bookContext({
+      classCode,
+      chapter: parsed.chapter,
+      paragraph: parsed.paragraph,
+      question: parsed.question,
+      query: text,
+    }) || undefined,
   });
   if (!generated.ok) return generated;
   if (novaContext) {
