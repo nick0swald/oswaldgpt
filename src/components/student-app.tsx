@@ -21,6 +21,16 @@ import {
 import type { AnswerView, StepView, WinkView } from "@/lib/types";
 import { compressImage, searchLinks } from "@/lib/utils";
 
+/** Zet a./b./c. op eigen regels als het model ze op één regel plakte. */
+function formatModelAnswer(text: string): string {
+  return text
+    .replace(/\r\n/g, "\n")
+    .replace(/\s+(?=[a-d]\)\s)/gi, "\n")
+    .replace(/\s+(?=[a-d]\.\s)/gi, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 type Screen = "form" | "help" | "answer" | "wink" | "other";
 
 export function StudentApp() {
@@ -351,15 +361,17 @@ export function StudentApp() {
             {answer.questionShort ? (
               <p className="text-sm leading-relaxed text-muted">{answer.questionShort}</p>
             ) : null}
-            <div className="rounded-[var(--radius-xl)] bg-primary px-5 py-6 text-primary-fg">
-              <p className="text-sm font-semibold uppercase tracking-wide opacity-70">Antwoord</p>
-              <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-primary-fg">
-                {answer.modelAnswer}
-              </h2>
+            <div className="rounded-[var(--radius-xl)] bg-primary px-4 py-4 text-primary-fg">
+              <p className="text-xs font-semibold uppercase tracking-wide opacity-70">Antwoord</p>
+              <p className="mt-2 whitespace-pre-line text-base font-semibold leading-relaxed text-primary-fg">
+                {formatModelAnswer(answer.modelAnswer)}
+              </p>
             </div>
-            <div className="rounded-[var(--radius-lg)] bg-paper px-4 py-4 leading-relaxed text-fg">
-              {answer.explanation}
-            </div>
+            {answer.explanation?.trim() ? (
+              <div className="rounded-[var(--radius-lg)] bg-paper px-4 py-3 text-sm leading-relaxed text-fg">
+                {answer.explanation}
+              </div>
+            ) : null}
             <Button type="button" size="lg" variant="primary" onClick={onNewQuestion}>
               <span className="min-w-0 flex-1">
                 <span className="block text-lg font-extrabold">Nieuwe vraag</span>
