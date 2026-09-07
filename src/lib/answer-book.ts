@@ -47,11 +47,18 @@ function parseN(value?: string): number | undefined {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
-function preferredSeries(input: { series?: NovaSeries; chapter?: number }): NovaSeries[] {
-  if (input.series) return [input.series];
+function preferredSeries(input: {
+  series?: NovaSeries;
+  chapter?: number;
+}): NovaSeries[] {
+  if (input.series) {
+    const rest = (["gt4", "gt3", "kgt12"] as NovaSeries[]).filter((s) => s !== input.series);
+    return [input.series, ...rest];
+  }
+  // Zonder klas: hst ≥9 → 4GT; anders 3GT vóór 1|2 (klas 3 hst 1 botst anders op KGT).
   if (input.chapter && input.chapter >= 9) return ["gt4", "gt3", "kgt12"];
-  if (input.chapter && input.chapter >= 5) return ["gt3", "gt4", "kgt12"];
-  return ["kgt12", "gt3", "gt4"];
+  if (input.chapter) return ["gt3", "kgt12", "gt4"];
+  return ["gt3", "kgt12", "gt4"];
 }
 
 function sliceQuestion(text: string, question?: string): string {
@@ -61,17 +68,23 @@ function sliceQuestion(text: string, question?: string): string {
   if (!m) return text;
   const n = m[1];
   const letter = m[2] ?? "";
+  // Nova-antwoordenboek: vaak alleen het cijfer op een eigen regel.
   const startRe = new RegExp(
-    `(?:^|\\n)\\s*(?:opdracht(?:en)?\\s+)?${n}${letter ? letter : "(?:\\b|\\s)"}`,
+    `(?:^|\n)\s*(?:opdracht(?:en)?\s+|vraag\s+)?${n}${letter ? letter : ""}(?=\s|\n|$)`,
     "i",
   );
   const start = text.search(startRe);
   if (start < 0) return text;
   const next = Number(n) + 1;
-  const nextRe = new RegExp(`(?:^|\\n)\\s*(?:opdracht(?:en)?\\s+)?${next}\\b`, "i");
+  const nextRe = new RegExp(
+    `(?:^|\n)\s*(?:opdracht(?:en)?\s+|vraag\s+)?${next}(?=\s|\n|$)`,
+    "i",
+  );
   const rest = text.slice(start + 1);
   const cut = rest.search(nextRe);
-  const block = (cut >= 0 ? text.slice(start, start + 1 + cut) : text.slice(start, start + 2800)).trim();
+  let block = (cut >= 0 ? text.slice(start, start + 1 + cut) : text.slice(start, start + 2800)).trim();
+  // Strip losse woordbanken die OCR ná het antwoord plakt (kleuren/antwoorden van eerdere vragen).
+  block = block.replace(/(?:\n(?:nuldraad|fasedraad|schakeldraad|groepsschakelaar|koper|pvc)\s*)+$/i, "").trim();
   return block.length > 40 ? block : text;
 }
 
