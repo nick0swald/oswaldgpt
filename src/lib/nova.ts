@@ -274,6 +274,16 @@ export function seriesForClass(classCode: string): NovaSeries {
   return "kgt12";
 }
 
+/** Haalt jaarlaag/serie uit vrije tekst ("klas 3", "3HGL", "4GT", …). */
+export function seriesFromQuery(text: string): NovaSeries | undefined {
+  const t = text.toLowerCase();
+  if (!t.trim()) return undefined;
+  if (/\b3hgl\b/.test(t) || /\b4gt\b/.test(t) || /\bklas\s*4\b/.test(t)) return "gt4";
+  if (/\bklas\s*3\b/.test(t) || /\b3\.(?:5|6)g?\b/.test(t)) return "gt3";
+  if (/\bklas\s*[12]\b/.test(t) || /\b2\.(?:5|6)g?\b/.test(t) || /\bkgt\b/.test(t)) return "kgt12";
+  return undefined;
+}
+
 export function chaptersForClass(classCode: string): NovaChapter[] {
   return SERIES[seriesForClass(classCode)].chapters;
 }

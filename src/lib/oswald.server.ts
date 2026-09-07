@@ -1,5 +1,5 @@
 import { timingSafeEqual, randomUUID } from "node:crypto";
-import { getSql } from "@/lib/db";
+import { dbSource, getSql } from "@/lib/db";
 import {
   CLASS_CODES,
   DEFAULT_NAMES,
@@ -9,7 +9,7 @@ import {
 } from "@/lib/defaults";
 import { generateFollowup, generateHelp, type HelpPayload } from "@/lib/ai.server";
 import { answerBookExcerpt } from "@/lib/answer-book";
-import { lookupNova, parseNovaFromText, seriesForClass } from "@/lib/nova";
+import { lookupNova, parseNovaFromText, seriesForClass, seriesFromQuery } from "@/lib/nova";
 import type { AnswerView, DayStat, FollowUp, StepView, SubmitResult, WinkView } from "@/lib/types";
 
 export type { AnswerView, StepView };
@@ -25,8 +25,9 @@ function bookContext(input: {
 }): string {
   const classCode = input.classCode?.trim() ?? "";
   const known = CLASS_CODES.includes(classCode as (typeof CLASS_CODES)[number]);
+  const fromText = seriesFromQuery(input.query ?? "");
   return answerBookExcerpt({
-    series: known ? seriesForClass(classCode) : undefined,
+    series: known ? seriesForClass(classCode) : fromText,
     chapter: input.chapter,
     paragraph: input.paragraph,
     question: input.question,
@@ -331,8 +332,12 @@ export async function askHelp(input: {
   }
 
   const parsed = parseNovaFromText(text);
+  const inferredSeries = seriesFromQuery(text);
+  const effectiveClass =
+    classCode ||
+    (inferredSeries === "gt4" ? "4GT" : inferredSeries === "gt3" ? "3.5G" : inferredSeries === "kgt12" ? "2.5G" : "");
   const novaContext = lookupNova({
-    classCode,
+    classCode: effectiveClass || classCode,
     chapter: parsed.chapter,
     paragraph: parsed.paragraph,
     question: parsed.question,
@@ -343,7 +348,7 @@ export async function askHelp(input: {
     imageDataUrl: image,
     novaContext: novaContext || undefined,
     bookExcerpt: bookContext({
-      classCode,
+      classCode: effectiveClass || classCode,
       chapter: parsed.chapter,
       paragraph: parsed.paragraph,
       question: parsed.question,
@@ -590,9 +595,24 @@ export async function revealAnswer(
 }
 
 export async function teacherOverview(pin: string): Promise<
-  { ok: true; days: DayStat[] } | { ok: false; error: string }
+  | {
+      ok: true;
+      days: DayStat[];
+      byClass: { classCode: string; questions: number; answers: number }[];
+      recent: {
+        name: string;
+        classCode: string;
+        at: string;
+        stepsShown: number;
+        answerShown: boolean;
+        questionShort: string;
+      }[];
+      persistent: boolean;
+    }
+  | { ok: false; error: string }
 > {
   if (!pinMatches(pin)) return { ok: false, error: "Onjuiste PIN." };
+  const persistent = dbSource === "neon";
   try {
     const sql = await getSql();
     const rows = await sql<{
@@ -614,8 +634,43 @@ export async function teacherOverview(pin: string): Promise<
     order by 1 desc
     limit 60
   `;
+    const classRows = await sql<{
+      class_code: string;
+      questions: number;
+      answers: number;
+    }>`
+    select
+      coalesce(nullif(class_code, ''), '—') as class_code,
+      count(*)::int as questions,
+      coalesce(sum(case when answer_shown then 1 else 0 end), 0)::int as answers
+    from sessions
+    where submitted_question = true
+    group by 1
+    order by questions desc
+  `;
+    const recentRows = await sql<{
+      student_name: string;
+      class_code: string;
+      at: string;
+      steps_shown: number;
+      answer_shown: boolean;
+      help_json: string | null;
+    }>`
+    select
+      student_name,
+      class_code,
+      timezone('Europe/Amsterdam', coalesce(question_submitted_at, created_at))::text as at,
+      steps_shown,
+      answer_shown,
+      help_json
+    from sessions
+    where submitted_question = true
+    order by coalesce(question_submitted_at, created_at) desc
+    limit 40
+  `;
     return {
       ok: true,
+      persistent,
       days: rows.map((r) => ({
         day: r.day,
         questions: Number(r.questions) || 0,
@@ -625,10 +680,43 @@ export async function teacherOverview(pin: string): Promise<
             ? null
             : Number(r.avg_seconds),
       })),
+      byClass: classRows.map((r) => ({
+        classCode: r.class_code,
+        questions: Number(r.questions) || 0,
+        answers: Number(r.answers) || 0,
+      })),
+      recent: recentRows.map((r) => {
+        let questionShort = "";
+        try {
+          if (r.help_json) {
+            const help = JSON.parse(r.help_json) as { question_short?: string };
+            questionShort = help.question_short?.trim() ?? "";
+          }
+        } catch {
+          /* ignore */
+        }
+        return {
+          name: r.student_name || "zonder naam",
+          classCode: r.class_code || "—",
+          at: r.at,
+          stepsShown: Number(r.steps_shown) || 0,
+          answerShown: Boolean(r.answer_shown),
+          questionShort,
+        };
+      }),
     };
   } catch (err) {
     console.error("[oswald] teacherOverview db", err);
     const byDay = new Map<string, { questions: number; answers: number; seconds: number[] }>();
+    const byClass = new Map<string, { questions: number; answers: number }>();
+    const recent: {
+      name: string;
+      classCode: string;
+      at: string;
+      stepsShown: number;
+      answerShown: boolean;
+      questionShort: string;
+    }[] = [];
     for (const s of memory().sessions.values()) {
       if (!s.submitted_question) continue;
       const day = (s.question_submitted_at ?? s.created_at).slice(0, 10);
@@ -641,7 +729,30 @@ export async function teacherOverview(pin: string): Promise<
         if (Number.isFinite(sec) && sec >= 0) cur.seconds.push(sec);
       }
       byDay.set(day, cur);
+      const cc = s.class_code || "—";
+      const ccCur = byClass.get(cc) ?? { questions: 0, answers: 0 };
+      ccCur.questions += 1;
+      if (s.answer_shown) ccCur.answers += 1;
+      byClass.set(cc, ccCur);
+      let questionShort = "";
+      try {
+        if (s.help_json) {
+          const help = JSON.parse(s.help_json) as { question_short?: string };
+          questionShort = help.question_short?.trim() ?? "";
+        }
+      } catch {
+        /* ignore */
+      }
+      recent.push({
+        name: s.student_name || "zonder naam",
+        classCode: cc,
+        at: s.question_submitted_at ?? s.created_at,
+        stepsShown: s.steps_shown,
+        answerShown: s.answer_shown,
+        questionShort,
+      });
     }
+    recent.sort((a, b) => b.at.localeCompare(a.at));
     const days: DayStat[] = [...byDay.entries()]
       .sort((a, b) => b[0].localeCompare(a[0]))
       .slice(0, 60)
@@ -654,7 +765,15 @@ export async function teacherOverview(pin: string): Promise<
             ? null
             : v.seconds.reduce((a, b) => a + b, 0) / v.seconds.length,
       }));
-    return { ok: true, days };
+    return {
+      ok: true,
+      persistent,
+      days,
+      byClass: [...byClass.entries()]
+        .map(([classCode, v]) => ({ classCode, ...v }))
+        .sort((a, b) => b.questions - a.questions),
+      recent: recent.slice(0, 40),
+    };
   }
 }
 
