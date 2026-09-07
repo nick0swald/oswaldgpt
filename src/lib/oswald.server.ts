@@ -245,7 +245,7 @@ export async function submitQuestion(input: {
     return { ok: false, error: "Je hebt genoeg vragen gesteld. Vraag je docent als je verder wilt." };
   }
 
-  const generated = await generateHelp({
+  let generated = await generateHelp({
     text: text || undefined,
     imageDataUrl: image,
     novaContext: novaContext || undefined,
@@ -261,6 +261,29 @@ export async function submitQuestion(input: {
   if (novaContext) {
     generated.help.topic = "nask";
     generated.help.readable = true;
+  } else if (generated.help.topic === "other" && text && looksLikePhysicsCuriosity(text)) {
+    const nudged = await generateHelp({
+      text: `${text}\n\n(Classificeer als wink: natuurkunde buiten de les — kort antwoord op niveau, geen other.)`,
+      imageDataUrl: image,
+      bookTitle: titles,
+      novaContext: undefined,
+    });
+    if (nudged.ok && nudged.help.topic !== "other") {
+      generated = nudged;
+    } else {
+      generated.help.topic = "wink";
+      generated.help.readable = true;
+      if (!generated.help.answer.explanation.trim()) {
+        generated.help.answer.explanation = "Dit is wel natuurkunde, maar niet van onze les.";
+      }
+      if (!generated.help.answer.model_answer.trim()) {
+        generated.help.answer.model_answer =
+          "Goede natuurkundevraag — even zoeken met de zoekzin hieronder, of stel hem opnieuw iets concreter.";
+      }
+      if (!generated.help.search_query.trim()) {
+        generated.help.search_query = text.slice(0, 80);
+      }
+    }
   }
   if (!generated.help.readable) {
     return {
@@ -350,6 +373,15 @@ export async function submitQuestion(input: {
 
 
 /** Grapjes over de docent / kletspraat zonder NaSk-inhoud → other. */
+
+/** Ruim natuurkunde-net: heelal/Fermi/donkere materie etc. → geen other. */
+function looksLikePhysicsCuriosity(text: string): boolean {
+  const t = text.toLowerCase().normalize("NFKC");
+  return /\b(fermi|donkere\s+materie|donkere\s+energie|zwart\s*gat|zwarte\s+gaten|quantum|relativiteit|heelal|big\s*bang|melkweg|seti|alien|aliens|deeltjesfysica|higgs|antimaterie|straling|kernfusie|fotonen|neutronenster|supernova|exoplanet)\b/.test(
+    t,
+  );
+}
+
 function isOffTopicBanter(text: string): boolean {
   const t = text.toLowerCase().normalize("NFKC");
   if (!t.trim()) return false;
@@ -364,7 +396,7 @@ function isOffTopicBanter(text: string): boolean {
       t,
     );
   const hasPhysics =
-    /\b(volt|ampère|ampere|stroom|spanning|kracht|dichtheid|newton|joule|watt|ohm|molecuul|atoom|nova|hoofdstuk|hst\b|paragraaf|par\.?\b|formule|binas|practicum|weerstand|lading|energie|snelheid|versnelling|druk|temperatuur|celsius|kelvin)\b/.test(
+    /\b(volt|ampère|ampere|stroom|spanning|kracht|dichtheid|newton|joule|watt|ohm|molecuul|atoom|nova|hoofdstuk|hst\b|paragraaf|par\.?\b|formule|binas|practicum|weerstand|lading|energie|snelheid|versnelling|druk|temperatuur|celsius|kelvin|fermi|donkere\s+materie|donkere\s+energie|zwart\s*gat|zwarte\s+gaten|quantum|relativiteit|heelal|big\s*bang|planeet|sterren|melkweg|satelliet|seti|alien|aliens|deeltjes|fotonen|straling|isotop|kernfusie|kernenergie)\b/.test(
       t,
     );
   if (hasPhysics) return false;
@@ -451,7 +483,7 @@ export async function askHelp(input: {
     question: parsed.question,
   });
 
-  const generated = await generateHelp({
+  let generated = await generateHelp({
     text: text || undefined,
     imageDataUrl: image,
     novaContext: novaContext || undefined,
@@ -467,6 +499,29 @@ export async function askHelp(input: {
   if (novaContext) {
     generated.help.topic = "nask";
     generated.help.readable = true;
+  } else if (generated.help.topic === "other" && text && looksLikePhysicsCuriosity(text)) {
+    const nudged = await generateHelp({
+      text: `${text}\n\n(Classificeer als wink: natuurkunde buiten de les — kort antwoord op niveau, geen other.)`,
+      imageDataUrl: image,
+      bookTitle: titles,
+      novaContext: undefined,
+    });
+    if (nudged.ok && nudged.help.topic !== "other") {
+      generated = nudged;
+    } else {
+      generated.help.topic = "wink";
+      generated.help.readable = true;
+      if (!generated.help.answer.explanation.trim()) {
+        generated.help.answer.explanation = "Dit is wel natuurkunde, maar niet van onze les.";
+      }
+      if (!generated.help.answer.model_answer.trim()) {
+        generated.help.answer.model_answer =
+          "Goede natuurkundevraag — even zoeken met de zoekzin hieronder, of stel hem opnieuw iets concreter.";
+      }
+      if (!generated.help.search_query.trim()) {
+        generated.help.search_query = text.slice(0, 80);
+      }
+    }
   }
   if (!generated.help.readable) {
     return {
