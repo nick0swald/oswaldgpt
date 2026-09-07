@@ -466,7 +466,7 @@ export async function generatePracticeQuestion(input: {
   modelAnswer: string;
   explanation: string;
 }): Promise<
-  | { ok: true; question: string; modelAnswer: string; explanation: string }
+  | { ok: true; practice: { question: string; modelAnswer: string; explanation: string } }
   | { ok: false; error: string }
 > {
   const apiKey = process.env.XAI_API_KEY;
@@ -538,9 +538,11 @@ Maak één vergelijkbare oefenvraag met nieuwe getallen/namen. JSON volgens sche
     }
     return {
       ok: true,
-      question: data.question.trim(),
-      modelAnswer: data.model_answer.trim(),
-      explanation: data.explanation.trim(),
+      practice: {
+        question: data.question.trim(),
+        modelAnswer: data.model_answer.trim(),
+        explanation: data.explanation.trim(),
+      },
     };
   } catch {
     return { ok: false, error: "Oefenvraag maken lukte niet. Probeer het nog eens." };
