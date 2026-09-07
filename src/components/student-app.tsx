@@ -52,11 +52,11 @@ export function StudentApp() {
   const [answer, setAnswer] = useState<AnswerView | null>(null);
   const [wink, setWink] = useState<WinkView | null>(null);
   const [otherMessage, setOtherMessage] = useState("");
-  const [deeperExplanation, setDeeperExplanation] = useState<string | null>(null);
-  const [deeperUsed, setDeeperUsed] = useState(false);
+  const [deeperCount, setDeeperCount] = useState(0);
   const [deeperLoading, setDeeperLoading] = useState(false);
+  const [deeperExtras, setDeeperExtras] = useState<string[]>([]);
   const [practice, setPractice] = useState<PracticeQuestionView | null>(null);
-  const [practiceUsed, setPracticeUsed] = useState(false);
+  const [practiceCount, setPracticeCount] = useState(0);
   const [practiceLoading, setPracticeLoading] = useState(false);
   const [practiceAnswerShown, setPracticeAnswerShown] = useState(false);
   const [winkFollowups, setWinkFollowups] = useState<{ question: string; reply: string }[]>([]);
@@ -130,10 +130,10 @@ export function StudentApp() {
       setWinkFollowups([]);
       setWinkAsk("");
       setOtherMessage("");
-      setDeeperExplanation(null);
-      setDeeperUsed(false);
+      setDeeperExtras([]);
+      setDeeperCount(0);
       setPractice(null);
-      setPracticeUsed(false);
+      setPracticeCount(0);
       setPracticeAnswerShown(false);
       if (res.kind === "other") {
         setOtherMessage(res.message);
@@ -205,11 +205,11 @@ export function StudentApp() {
     setWinkFollowups([]);
     setWinkAsk("");
     setOtherMessage("");
-    setDeeperExplanation(null);
-    setDeeperUsed(false);
+    setDeeperExtras([]);
+    setDeeperCount(0);
     setDeeperLoading(false);
     setPractice(null);
-    setPracticeUsed(false);
+    setPracticeCount(0);
     setPracticeLoading(false);
     setPracticeAnswerShown(false);
     setSessionId("");
@@ -217,8 +217,10 @@ export function StudentApp() {
     setScreen("form");
   }
 
+  const MAX_EXTRA = 4;
+
   async function onDeeperExplanation() {
-    if (!answer || deeperUsed || deeperLoading) return;
+    if (!answer || deeperCount >= MAX_EXTRA || deeperLoading) return;
     setDeeperLoading(true);
     try {
       const res = await deeperExplanationFn({
@@ -226,15 +228,15 @@ export function StudentApp() {
           sessionId: sessionId || undefined,
           questionShort: answer.questionShort,
           modelAnswer: answer.modelAnswer,
-          explanation: answer.explanation,
+          explanation: [answer.explanation, ...deeperExtras].filter(Boolean).join("\n\n"),
         },
       });
       if (!res.ok) {
         toast.error(res.error);
         return;
       }
-      setDeeperExplanation(res.explanation);
-      setDeeperUsed(true);
+      setDeeperExtras((prev) => [...prev, res.explanation]);
+      setDeeperCount((n) => n + 1);
     } catch {
       toast.error("Diepere uitleg lukte niet. Probeer het nog eens.");
     } finally {
@@ -243,7 +245,7 @@ export function StudentApp() {
   }
 
   async function onPracticeQuestion() {
-    if (!answer || practiceUsed || practiceLoading) return;
+    if (!answer || practiceCount >= MAX_EXTRA || practiceLoading) return;
     setPracticeLoading(true);
     try {
       const res = await practiceQuestionFn({
@@ -258,12 +260,8 @@ export function StudentApp() {
         toast.error(res.error);
         return;
       }
-      setPractice({
-        question: res.question,
-        modelAnswer: res.modelAnswer,
-        explanation: res.explanation,
-      });
-      setPracticeUsed(true);
+      setPractice(res.practice);
+      setPracticeCount((n) => n + 1);
       setPracticeAnswerShown(false);
     } catch {
       toast.error("Oefenvraag maken lukte niet. Probeer het nog eens.");
@@ -487,12 +485,14 @@ export function StudentApp() {
                 <p className="mt-2 whitespace-pre-line text-sm leading-relaxed">{answer.explanation}</p>
               </div>
             ) : null}
-            {deeperExplanation ? (
-              <div className="rounded-[var(--radius-lg)] bg-paper px-4 py-4 leading-relaxed text-fg">
-                <p className="text-xs font-bold uppercase tracking-wide text-leaf">Nog meer uitleg</p>
-                <p className="mt-2 whitespace-pre-line text-sm leading-relaxed">{deeperExplanation}</p>
+            {deeperExtras.map((text, i) => (
+              <div key={`deeper-${i}`} className="rounded-[var(--radius-lg)] bg-paper px-4 py-4 leading-relaxed text-fg">
+                <p className="text-xs font-bold uppercase tracking-wide text-leaf">
+                  Nog meer uitleg{deeperExtras.length > 1 ? ` (${i + 1})` : ""}
+                </p>
+                <p className="mt-2 whitespace-pre-line text-sm leading-relaxed">{text}</p>
               </div>
-            ) : null}
+            ))}
             {practice ? (
               <div className="grid gap-3 rounded-[var(--radius-lg)] bg-surface px-4 py-4">
                 <p className="text-xs font-bold uppercase tracking-wide text-leaf">Oefenvraag</p>
@@ -530,7 +530,7 @@ export function StudentApp() {
               </div>
             ) : null}
             <div className="grid gap-2">
-              {!deeperUsed ? (
+              {deeperCount < MAX_EXTRA ? (
                 <Button
                   type="button"
                   size="lg"
@@ -541,11 +541,17 @@ export function StudentApp() {
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block text-lg font-extrabold">Ik snap het nog niet</span>
-                    <span className="block text-sm font-medium opacity-70">Nog meer uitleg</span>
+                    <span className="block text-sm font-medium opacity-70">
+                      Extra uitleg ({deeperCount}/{MAX_EXTRA})
+                    </span>
                   </span>
                 </Button>
-              ) : null}
-              {!practiceUsed ? (
+              ) : (
+                <p className="text-sm leading-relaxed text-muted">
+                  Max. {MAX_EXTRA}× extra uitleg voor deze vraag. Lever de vraag opnieuw in om verder te oefenen.
+                </p>
+              )}
+              {practiceCount < MAX_EXTRA ? (
                 <Button
                   type="button"
                   size="lg"
@@ -556,10 +562,16 @@ export function StudentApp() {
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block text-lg font-extrabold">Oefenvraag</span>
-                    <span className="block text-sm font-medium opacity-70">Zelfde vaardigheid, nieuw voorbeeld</span>
+                    <span className="block text-sm font-medium opacity-70">
+                      Zelfde vaardigheid ({practiceCount}/{MAX_EXTRA})
+                    </span>
                   </span>
                 </Button>
-              ) : null}
+              ) : (
+                <p className="text-sm leading-relaxed text-muted">
+                  Max. {MAX_EXTRA}× oefenvraag hier. Nieuwe ronde? Vraag opnieuw inleveren.
+                </p>
+              )}
             </div>
             <Button type="button" size="lg" variant="primary" onClick={onNewQuestion}>
               <span className="min-w-0 flex-1">
