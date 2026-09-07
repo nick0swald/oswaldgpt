@@ -68,7 +68,7 @@ Eerst classificeren. Zet topic:
 
 - "nask": VMBO-NaSk. Opdrachten uit Nova, begrippen, formules, toets/examen leren, Binas, vaardigheden, én hoe je NaSk leert (samenvatting, Onthoud, begrippenlijst, aanpak van een opdracht). Ook algemene lesvragen zoals "wat is dichtheid?" of "hoe schrijf ik een samenvatting van hoofdstuk 9?". Foto van een werkblad hoort hier. DAN de hint-stappen.
 
-- "wink": het IS natuurkunde of scheikunde, maar niet van de VMBO-les (te hoog, te leuk-weetje, universiteit, quantum, relativiteit, zwarte gaten, organische chemie, trivia). DAN geen hints. Wel een knipoog, een heel kort simpel antwoord, en een zoekzin.
+- "wink": het IS natuurkunde of scheikunde, maar niet van de VMBO-les (te hoog, leuk-weetje, universiteit, quantum, relativiteit, zwarte gaten, organische chemie, trivia). Natuurkunde/scheikunde-vragen ALTIJD topic wink of nask — nooit other. Bij wink: geen les-hints, wél kort antwoord (PG-13: geen expliciet geweld/seks/drugs-howto), korte note dat het niet van onze les is (ZONDER het woord knipoog), en een zoekzin.
 
 - "other": een ander vak of kletspraat (Nederlands-opstel, geschiedenis, Engels, aardrijkskunde, biologie als het geen NaSk is, grappen). Let op: "hoe maak ik een samenvatting" voor NaSk/toets IS nask, geen other. DAN geen hints en GEEN antwoord. Leeg answer.model_answer.
 
@@ -93,10 +93,12 @@ Als topic "nask":
 Als de leerling een Nova-hoofdstuk/paragraaf/opdracht typt in het tekstveld, is het lesstof. Geen wink. Geen other.
 
 Als topic "wink":
-- hint_count 1. Stappen mogen kort en leeg-achtig.
-- answer.model_answer: één simpele zin, geen college.
-- answer.explanation: knipoog, in de trant van: "Dit is wel natuurkunde, maar niet van onze les. Knipoog."
-- search_query: een korte Nederlandse zoekzin waarmee de leerling dit kan opzoeken.
+- hint_count 1. Stappen mogen kort en leeg-achtig (geen Nova-hints).
+- answer.model_answer: kort, begrijpelijk VMBO-antwoord (1–3 zinnen). Natuurkunde mag altijd — wees behulpzaam.
+- answer.explanation: korte note ZONDER het woord "knipoog", bijv. "Dit is wel natuurkunde, maar niet van onze les." of "Leuk weetje — hoort niet bij dit hoofdstuk."
+- PG-13: geen expliciete seks, geen geweldsinstructies, geen gevaarlijke experimenten uitleggen om na te doen. Bij twijfel: vriendelijk afhouden.
+- search_query: korte Nederlandse zoekzin om verder te lezen.
+- Gebruik NOOIT het woord knipoog/Knipoog.
 
 Als topic "other":
 - hint_count 1. answer.model_answer: "".
@@ -265,18 +267,36 @@ Regels:
 - Bij leren/samenvatting: mag je een stukje methode geven, geen heel opstel.
 - Max 4 zinnen. Geen emoji.`;
 
+const WINK_FOLLOWUP_PROMPT = `Je bent Oswald, NaSk-hulpleraar van Nick Oswald (VMBO). De leerling vroeg iets buiten de les (natuurkunde/scheikunde-weetje) en vraagt door.
+
+Regels:
+- Nederlands. Kort. Op niveau. Geen emoji.
+- Geef een behulpzaam, kort antwoord (mag wel een beetje uitleg).
+- Noem eventueel dat het niet van onze les is — NOOIT het woord knipoog.
+- PG-13: geen expliciete seks, geen gewelds-/explosieven-howto, geen gevaarlijke experimenten om na te doen.
+- Max 5 zinnen.`;
+
 export async function generateFollowup(input: {
   questionShort: string;
   shownHints: string[];
   followup: string;
+  mode?: "lesson" | "wink";
 }): Promise<{ ok: true; reply: string } | { ok: false; error: string }> {
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) {
     return { ok: false, error: "Hulp is nu even niet beschikbaar. Probeer het later of vraag je docent." };
   }
 
+  const winkMode = input.mode === "wink";
   const hints = input.shownHints.filter(Boolean).join("\n- ");
-  const user = `Opdracht (kort): ${input.questionShort || "(foto)"}
+  const user = winkMode
+    ? `Onderwerp (kort): ${input.questionShort || "(foto)"}
+
+Doorvraag van de leerling:
+${input.followup}
+
+Beantwoord kort en behulpzaam (PG-13). Geen woord knipoog. JSON volgens schema.`
+    : `Opdracht (kort): ${input.questionShort || "(foto)"}
 
 Hints die de leerling al zag:
 - ${hints || "(eerste hint)"}
@@ -289,9 +309,9 @@ Beantwoord alleen de wedervraag. Geen eindantwoord. JSON volgens schema.`;
   const body = {
     model: "grok-4.20-0309-non-reasoning",
     temperature: 0.3,
-    max_tokens: 400,
+    max_tokens: winkMode ? 500 : 400,
     messages: [
-      { role: "system", content: FOLLOWUP_PROMPT },
+      { role: "system", content: winkMode ? WINK_FOLLOWUP_PROMPT : FOLLOWUP_PROMPT },
       { role: "user", content: user },
     ],
     response_format: {

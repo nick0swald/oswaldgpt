@@ -276,9 +276,10 @@ export async function submitQuestion(input: {
     if (isWink) {
       const wink: WinkView = {
         questionShort: generated.help.question_short,
-        wink:
-          generated.help.answer.explanation.trim() ||
-          "Dit is wel natuurkunde, maar niet van onze les. Knipoog.",
+        wink: (generated.help.answer.explanation.trim() || "Dit is wel natuurkunde, maar niet van onze les.")
+          .replace(/\bknipoog\b/gi, "")
+          .replace(/\s{2,}/g, " ")
+          .trim() || "Dit is wel natuurkunde, maar niet van onze les.",
         simpleAnswer: generated.help.answer.model_answer.trim(),
         searchQuery:
           generated.help.search_query.trim() || generated.help.question_short.trim() || text,
@@ -415,9 +416,10 @@ export async function askHelp(input: {
       sessionId: id,
       wink: {
         questionShort: generated.help.question_short,
-        wink:
-          generated.help.answer.explanation.trim() ||
-          "Dit is wel natuurkunde, maar niet van onze les. Knipoog.",
+        wink: (generated.help.answer.explanation.trim() || "Dit is wel natuurkunde, maar niet van onze les.")
+          .replace(/\bknipoog\b/gi, "")
+          .replace(/\s{2,}/g, " ")
+          .trim() || "Dit is wel natuurkunde, maar niet van onze les.",
         simpleAnswer: generated.help.answer.model_answer.trim(),
         searchQuery:
           generated.help.search_query.trim() || generated.help.question_short.trim() || text,
@@ -511,7 +513,7 @@ export async function askFollowup(
 
   const session = await loadSession(sessionId);
   const help = session ? readHelp(session) : null;
-  if (help && (help.topic === "other" || help.topic === "wink")) {
+  if (help && help.topic === "other") {
     return { ok: false, error: "Bij deze vraag kan Oswald geen wedervraag." };
   }
   const existing = help?.followups ?? [];
@@ -536,6 +538,7 @@ export async function askFollowup(
     questionShort: help?.question_short || fallback?.questionShort || "",
     shownHints: shown,
     followup: asked,
+    mode: help?.topic === "wink" ? "wink" : "lesson",
   });
   if (!generated.ok) return generated;
 

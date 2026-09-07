@@ -15,6 +15,7 @@ import {
 } from "@/lib/defaults";
 import {
   advanceStepFn,
+  askFollowupFn,
   askHelpFn,
   deeperExplanationFn,
   practiceQuestionFn,
@@ -58,6 +59,8 @@ export function StudentApp() {
   const [practiceUsed, setPracticeUsed] = useState(false);
   const [practiceLoading, setPracticeLoading] = useState(false);
   const [practiceAnswerShown, setPracticeAnswerShown] = useState(false);
+  const [winkFollowups, setWinkFollowups] = useState<{ question: string; reply: string }[]>([]);
+  const [winkAsk, setWinkAsk] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -124,6 +127,8 @@ export function StudentApp() {
       setStep(null);
       setAnswer(null);
       setWink(null);
+      setWinkFollowups([]);
+      setWinkAsk("");
       setOtherMessage("");
       setDeeperExplanation(null);
       setDeeperUsed(false);
@@ -197,6 +202,8 @@ export function StudentApp() {
     setPackedSteps([]);
     setAnswer(null);
     setWink(null);
+    setWinkFollowups([]);
+    setWinkAsk("");
     setOtherMessage("");
     setDeeperExplanation(null);
     setDeeperUsed(false);
@@ -264,6 +271,37 @@ export function StudentApp() {
       setPracticeLoading(false);
     }
   }
+
+  async function onWinkAsk(e: FormEvent) {
+    e.preventDefault();
+    const asked = winkAsk.trim();
+    if (asked.length < 2) {
+      toast.error("Typ je vraag.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await askFollowupFn({
+        data: {
+          sessionId: sessionId || undefined,
+          question: asked,
+          questionShort: wink?.questionShort || wink?.simpleAnswer || "",
+          shownHints: [],
+        },
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setWinkFollowups((prev) => [...prev, res.followup]);
+      setWinkAsk("");
+    } catch {
+      toast.error("Doorvragen lukte niet.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
 
   return (
     <div className="grid min-w-0 gap-5">
@@ -535,12 +573,12 @@ export function StudentApp() {
 
         {screen === "wink" && wink ? (
           <div className="grid min-w-0 gap-4">
-            <p className="text-sm font-semibold uppercase tracking-wide text-leaf">Knipoog</p>
+            <p className="text-sm font-semibold uppercase tracking-wide text-leaf">Buiten de les</p>
             {wink.questionShort ? (
               <p className="text-sm leading-relaxed text-muted">{wink.questionShort}</p>
             ) : null}
             <div className="rounded-[var(--radius-lg)] bg-surface px-4 py-4 leading-relaxed text-fg">
-              {wink.wink}
+              {wink.wink.replace(/\bknipoog\b/gi, "").replace(/\s{2,}/g, " ").trim()}
             </div>
             {wink.simpleAnswer ? (
               <div className="rounded-[var(--radius-xl)] bg-primary px-5 py-6 text-primary-fg">
@@ -550,8 +588,32 @@ export function StudentApp() {
                 <p className="mt-2 text-xl font-extrabold tracking-tight">{wink.simpleAnswer}</p>
               </div>
             ) : null}
+            {winkFollowups.map((item) => (
+              <div key={`${item.question}-${item.reply.slice(0, 24)}`} className="grid gap-2">
+                <div className="ml-8 rounded-[var(--radius-lg)] rounded-tr-sm bg-primary px-4 py-3 text-sm leading-relaxed text-primary-fg">
+                  {item.question}
+                </div>
+                <div className="mr-8 rounded-[var(--radius-lg)] rounded-tl-sm bg-paper px-4 py-3 text-sm leading-relaxed text-fg">
+                  {item.reply}
+                </div>
+              </div>
+            ))}
+            <form onSubmit={onWinkAsk} className="grid gap-2 rounded-[var(--radius-lg)] bg-surface p-3">
+              <Label htmlFor="wink-ask">Doorvragen</Label>
+              <Textarea
+                id="wink-ask"
+                value={winkAsk}
+                onChange={(e) => setWinkAsk(e.target.value)}
+                maxLength={400}
+                className="min-h-20"
+                placeholder="Nog iets weten over dit onderwerp?"
+              />
+              <Button type="submit" variant="paper" size="sm" loading={loading}>
+                Stel vraag
+              </Button>
+            </form>
             <p className="text-sm leading-relaxed text-muted">
-              Wil je het beter begrijpen? Zoek verder:
+              Of zoek verder:
             </p>
             <div className="grid grid-cols-2 gap-2">
               {searchLinks(wink.searchQuery).map((link) => (
