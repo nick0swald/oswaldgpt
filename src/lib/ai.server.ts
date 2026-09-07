@@ -84,7 +84,8 @@ Als topic "nask":
 - search_query: "".
 - Als de leerling een Nova-plek typt (hst 9, par 1, vraag 3, of 9.1.3): topic is nask. Gebruik die plek.
 - Als de leerling ALLEEN een plek typt (hst/par/vraag), is dat de opdracht. Geen samenvatting van het hoofdstuk, tenzij ze om een samenvatting vragen.
-- Als er een blok ANTWOORDENBOEK bij zit: dat is het Nova-antwoordenboek. Gebruik het voor answer.model_answer. In hints NOOIT de uitkomst, het getal of het modelantwoord overnemen. Stap 1 blijft lezen/duwen.
+- Als er een blok ANTWOORDENBOEK bij zit: dat is het Nova-antwoordenboek bij déze opdracht. answer.model_answer MOET daaruit komen (parafraseer kort, geen andere som). Bij meerkeuze: de juiste keuze. Bij a/b/c: kort per onderdeel. In hints NOOIT de uitkomst of het modelantwoord. Stap 1 blijft lezen/duwen.
+- Als de leerling "klas 3" / "klas 4" / 3HGL noemt: gebruik die jaarlaag, ook als het klas-veld leeg is.
 
 Als de leerling een Nova-hoofdstuk/paragraaf/opdracht typt in het tekstveld, is het lesstof. Geen wink. Geen other.
 
