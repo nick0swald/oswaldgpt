@@ -127,7 +127,7 @@ export async function generateHelp(input: {
   }
 
   const body = {
-    model: "grok-4.5",
+    model: "grok-4.20-0309-non-reasoning",
     temperature: 0.2,
     max_tokens: 1200,
     messages: [
@@ -283,7 +283,7 @@ ${input.followup}
 Beantwoord alleen de wedervraag. Geen eindantwoord. JSON volgens schema.`;
 
   const body = {
-    model: "grok-4.5",
+    model: "grok-4.20-0309-non-reasoning",
     temperature: 0.3,
     max_tokens: 400,
     messages: [
