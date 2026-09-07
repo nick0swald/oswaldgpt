@@ -265,7 +265,10 @@ const SERIES: Record<NovaSeries, { book: string; chapters: NovaChapter[] }> = {
 };
 
 export function seriesForClass(classCode: string): NovaSeries {
-  if (classCode === "4GT") return "gt4";
+  // 4GT + 3HGL → Nova 4GT; 3.5/3.6 → 3GT; 2.5/2.6 → NaSk 1|2
+  if (classCode === "4GT" || classCode === "3HGL") return "gt4";
+  if (classCode === "3.5G" || classCode === "3.6G") return "gt3";
+  if (classCode === "2.5G" || classCode === "2.6G") return "kgt12";
   if (classCode.startsWith("3")) return "gt3";
   if (classCode.startsWith("2")) return "kgt12";
   return "kgt12";

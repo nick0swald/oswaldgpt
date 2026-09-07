@@ -1,4 +1,4 @@
-import { ArrowRight, RotateCcw, Scan, Send, X } from "lucide-react";
+import { ArrowRight, RotateCcw, Scan, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { PledgeBanner } from "@/components/pledge-banner";
@@ -15,11 +15,10 @@ import {
 } from "@/lib/defaults";
 import {
   advanceStepFn,
-  askFollowupFn,
   askHelpFn,
   revealAnswerFn,
 } from "@/lib/oswald.functions";
-import type { AnswerView, FollowUp, StepView, WinkView } from "@/lib/types";
+import type { AnswerView, StepView, WinkView } from "@/lib/types";
 import { compressImage, searchLinks } from "@/lib/utils";
 
 type Screen = "form" | "help" | "answer" | "wink" | "other";
@@ -40,8 +39,6 @@ export function StudentApp() {
   const [answer, setAnswer] = useState<AnswerView | null>(null);
   const [wink, setWink] = useState<WinkView | null>(null);
   const [otherMessage, setOtherMessage] = useState("");
-  const [followups, setFollowups] = useState<FollowUp[]>([]);
-  const [followup, setFollowup] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -109,8 +106,6 @@ export function StudentApp() {
       setAnswer(null);
       setWink(null);
       setOtherMessage("");
-      setFollowups([]);
-      setFollowup("");
       if (res.kind === "other") {
         setOtherMessage(res.message);
         setScreen("other");
@@ -153,35 +148,6 @@ export function StudentApp() {
     }
   }
 
-  async function onFollowup(e: FormEvent) {
-    e.preventDefault();
-    const asked = followup.trim();
-    if (asked.length < 2) {
-      toast.error("Typ je wedervraag.");
-      return;
-    }
-    setLoading(true);
-    try {
-      const res = await askFollowupFn({
-        data: {
-          sessionId: sessionId || undefined,
-          question: asked,
-          questionShort: step?.questionShort || hints[0]?.questionShort,
-          shownHints: hints.flatMap((h) => [h.help, h.tip].filter(Boolean)),
-        },
-      });
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
-      }
-      setFollowups((prev) => [...prev, res.followup]);
-      setFollowup("");
-    } catch {
-      toast.error("Wedervraag lukte niet.");
-    } finally {
-      setLoading(false);
-    }
-  }
 
   async function onReveal() {
     if (answer) setScreen("answer");
@@ -208,8 +174,6 @@ export function StudentApp() {
     setAnswer(null);
     setWink(null);
     setOtherMessage("");
-    setFollowups([]);
-    setFollowup("");
     setSessionId("");
     sessionStorage.removeItem(SESSION_KEY);
     setScreen("form");
@@ -360,31 +324,6 @@ export function StudentApp() {
                 ) : null}
               </div>
             ))}
-            {followups.map((item) => (
-              <div key={`${item.question}-${item.reply.slice(0, 24)}`} className="grid gap-2">
-                <div className="ml-8 rounded-[var(--radius-lg)] rounded-tr-sm bg-primary px-4 py-3 text-sm leading-relaxed text-primary-fg">
-                  {item.question}
-                </div>
-                <div className="mr-8 rounded-[var(--radius-lg)] rounded-tl-sm bg-paper px-4 py-3 leading-relaxed text-fg">
-                  {item.reply}
-                </div>
-              </div>
-            ))}
-            <form onSubmit={onFollowup} className="grid gap-2 rounded-[var(--radius-lg)] bg-surface p-3">
-              <Label htmlFor="wedervraag">Nog een vraag</Label>
-              <Textarea
-                id="wedervraag"
-                value={followup}
-                onChange={(e) => setFollowup(e.target.value)}
-                maxLength={400}
-                className="min-h-20"
-                placeholder="Snap je iets niet? Vraag Oswald."
-              />
-              <Button type="submit" variant="paper" size="sm" loading={loading}>
-                <Send />
-                Stel vraag
-              </Button>
-            </form>
             <div className="grid gap-2 pt-1">
               {step.canAdvance ? (
                 <Button type="button" size="lg" variant="primary" loading={loading} onClick={onAdvance}>
