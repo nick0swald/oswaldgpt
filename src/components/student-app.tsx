@@ -322,7 +322,7 @@ export function StudentApp() {
               <div key={h.step} className="grid gap-2">
                 <p className="text-xs font-bold uppercase tracking-wide text-leaf">
                   Hint {h.step}
-                  {h.step === 1 ? " · tekst" : ""}
+                  {h.step === 1 ? " · tip" : ""}
                 </p>
                 <div className="rounded-[var(--radius-lg)] rounded-tl-sm bg-paper px-4 py-3 leading-relaxed text-fg">
                   {h.help}

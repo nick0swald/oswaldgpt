@@ -134,8 +134,17 @@ export function answerBookExcerpt(input: {
         if (exact.length) pages = exact;
       }
       const header = `${book.book} — hoofdstuk ${chapter}${paragraph ? `, paragraaf ${paragraph}` : ""}${question ? `, opdracht ${question}` : ""}.`;
-      const body = pages.map((p) => p.t).join("\n\n");
-      chunks.push(`${header}\n${sliceQuestion(body, question)}`);
+      const body = pages
+        .map((p) => `--- pagina ${p.p} (hst ${p.h ?? "?"}, par ${p.s ?? "?"}) ---\n${p.t}`)
+        .join("\n\n");
+      const sliced = sliceQuestion(body, question);
+      const pageHint = pages
+        .filter((p) => !question || sliced.includes(p.t.slice(0, 40)) || sliced.includes(`pagina ${p.p}`))
+        .map((p) => p.p);
+      const uniqPages = [...new Set(pageHint.length ? pageHint : pages.map((p) => p.p))];
+      chunks.push(
+        `${header} Pagina's in dit stuk: ${uniqPages.join(", ")}.\n${sliced}`,
+      );
       if (clip(chunks).length >= MAX_CHARS) break;
     }
     return clip(chunks);

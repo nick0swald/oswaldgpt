@@ -53,7 +53,7 @@ export const DEFAULT_NAMES = [
 ] as const;
 
 export const STEP_TITLES = [
-  "Heb je de tekst gelezen?",
+  "Eerste tip",
   "Kleine hint",
   "Nog een duwtje",
 ] as const;
