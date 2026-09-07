@@ -66,5 +66,5 @@ export const PLEDGE_KEY = "oswald_pledge";
 export const BEST_KEY = "oswald_da_best";
 export const SHOW_PLEDGE = false;
 
-export const MAX_QUESTIONS_PER_SESSION = 12;
-export const MAX_FOLLOWUPS = 6;
+export const MAX_QUESTIONS_PER_SESSION = 40;
+export const MAX_FOLLOWUPS = 20;
