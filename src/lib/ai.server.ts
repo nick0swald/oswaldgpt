@@ -76,8 +76,8 @@ readable: false alleen als de foto/tekst onleesbaar is. Zet dan korte uitleg in 
 
 Als topic "nask":
 - Drie smaken voor Stap 1 (step1.help):
-  1) Nova-opdracht letterlijk uit het boek (hst/par/vraag, of duidelijk uit Nova): Stap 1 noemt **één** pagina + **ongeveer waar** op die pagina. Voorbeeld: "Kijk in Nova op pagina 90, midden (ongeveer alinea 2), hst 1 par 2." Of: "pagina 26, bovenin bij opdracht 5." NOOIT een paginabereik (verboden: "pagina 89-91" / "pagina's 25 tot 27"). Kies de pagina waar de opdracht begint (zie "beste pagina" / "--- pagina N ---" in ANTWOORDENBOEK).
-  2) Vraag die met klas + lesstof te koppelen is aan een stuk tekst: Stap 1 wijst naar **één** pagina + plek (boven/midden/onder of alinea), kort — geen range.
+  1) Nova-opdracht letterlijk uit het boek (hst/par/vraag, of duidelijk uit Nova): Stap 1 BEGINT ALTIJD met "Heb je de tekst goed gelezen? Kijk …" en noemt daarna **één** pagina + **ongeveer waar**. Voorbeeld: "Heb je de tekst goed gelezen? Kijk in Nova op pagina 90, midden (ongeveer alinea 2), hst 1 par 2." NOOIT een paginabereik (verboden: "pagina 89-91"). Kies de pagina waar de opdracht begint (zie "beste pagina" / "--- pagina N ---" in ANTWOORDENBOEK).
+  2) Vraag die met klas + lesstof te koppelen is aan een stuk tekst: Stap 1 begint ook met "Heb je de tekst goed gelezen? Kijk …" + **één** pagina/plek (boven/midden/onder of alinea) — geen range.
   3) Willekeurige / algemene NaSk-vraag (begrip, formule, "wat is …?", toets-hulp zonder boekplek): Stap 1 is meteen een **eerste hint of wedervraag**. GEEN "heb je gelezen?" / GEEN boek-verwijzing tenzij de leerling zelf een plek noemt. Bij samenvatting: stuur naar Onthoud/Begrippen; vraag welk hst als dat ontbreekt.
 - Stap 2–3: kleine hints die **begrip** sturen. Mag eigen woorden, analogie, wedervraag, rekenstap-richting — niet letterlijk het boek overschrijven. Nooit de einduitkomst in stap 1–2.
 - hint_count 1–3. Hints: beknopt, op niveau (VMBO), wel genoeg context om verder te komen.
@@ -199,7 +199,7 @@ function buildUserText(text: string | undefined, novaContext?: string, bookExcer
   const titles = STEP_TITLES.join(" / ");
   const nova = novaContext?.trim() ? `\n\n${novaContext}\n` : "\n";
   const book = bookExcerpt?.trim()
-    ? `\n\nANTWOORDENBOEK (alleen voor jou; niet het antwoord in hints. Bij boekvraag in stap 1: ÉÉN pagina + boven/midden/onder of alinea — geen range):\n${bookExcerpt.trim()}\n`
+    ? `\n\nANTWOORDENBOEK (alleen voor jou; niet het antwoord in hints. Bij boekvraag stap 1: begin met "Heb je de tekst goed gelezen? Kijk …" + ÉÉN pagina + plek — geen range):\n${bookExcerpt.trim()}\n`
     : "";
   if (trimmed) {
     return `Vraag van een VMBO-leerling:${nova}${book}\n${trimmed}\n\nDit is hulp bij de opdracht/plek hierboven. Geen samenvatting van het hele hoofdstuk, tenzij de leerling daar om vraagt.\nClassificeer (nask / wink / other). Alleen bij nask: hulp zoals Nick Oswald (${titles}). JSON volgens schema.`;
