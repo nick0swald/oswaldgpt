@@ -368,8 +368,9 @@ export function StudentApp() {
               </p>
             </div>
             {answer.explanation?.trim() ? (
-              <div className="rounded-[var(--radius-lg)] bg-paper px-4 py-3 text-sm leading-relaxed text-fg">
-                {answer.explanation}
+              <div className="rounded-[var(--radius-lg)] bg-paper px-4 py-4 leading-relaxed text-fg">
+                <p className="text-xs font-bold uppercase tracking-wide text-leaf">Uitleg</p>
+                <p className="mt-2 whitespace-pre-line text-sm leading-relaxed">{answer.explanation}</p>
               </div>
             ) : null}
             <Button type="button" size="lg" variant="primary" onClick={onNewQuestion}>
