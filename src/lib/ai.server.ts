@@ -80,11 +80,16 @@ Als topic "nask":
   2) Algemene NaSk-vraag of toets-hulp (begrip, formule, samenvatting, hoe leer ik dit): Stap 1 is een eerste duw, geen eindrecept. Bij een samenvatting: stuur naar Onthoud en Begrippen van dat hoofdstuk. Vraag welk hoofdstuk als dat ontbreekt.
 - Stap 2–3: kleine hints, geen volledig stappenplan-antwoord.
 - hint_count 1–3. Nooit de uitkomst of het hele recept in stap 1.
-- answer.model_answer: bij een som het modelantwoord (Nova-stijl). Bij toets-hulp/samenvatting: een kort bruikbaar recept (max 5 zinnen).
+- answer.model_answer: rustig en kort (Nova-nakijkstijl). Geen enthousiasme, geen "goed bezig", geen lange uitwijding. Bij toets-hulp/samenvatting: max 3 korte zinnen.
+- Opmaak model_answer: bij onderdelen a/b/c/d elk op een EIGEN regel, zo:
+  a. …
+  b. …
+  Gebruik echte regeleinden (\n), niet alles op één regel.
 - search_query: "".
 - Als de leerling een Nova-plek typt (hst 9, par 1, vraag 3, of 9.1.3): topic is nask. Gebruik die plek.
 - Als de leerling ALLEEN een plek typt (hst/par/vraag), is dat de opdracht. Geen samenvatting van het hoofdstuk, tenzij ze om een samenvatting vragen.
-- Als er een blok ANTWOORDENBOEK bij zit: dat is het Nova-antwoordenboek bij déze opdracht. answer.model_answer MOET daaruit komen (parafraseer kort, geen andere som). Bij meerkeuze: de juiste keuze. Bij a/b/c: kort per onderdeel. In hints NOOIT de uitkomst of het modelantwoord. Stap 1 blijft lezen/duwen.
+- Als er een blok ANTWOORDENBOEK bij zit: dat is het Nova-antwoordenboek bij déze opdracht. answer.model_answer MOET daaruit komen (kort parafrasereren). Bij meerkeuze: alleen de juiste keuze. Bij a/b/c: één korte regel per onderdeel. In hints NOOIT de uitkomst. Stap 1 blijft lezen/duwen.
+- answer.explanation: max 2 korte zinnen, nuchter. Liever leeg-achtig dan uitbundig.
 - Als de leerling "klas 3" / "klas 4" / 3HGL noemt: gebruik die jaarlaag, ook als het klas-veld leeg is.
 
 Als de leerling een Nova-hoofdstuk/paragraaf/opdracht typt in het tekstveld, is het lesstof. Geen wink. Geen other.
@@ -101,7 +106,7 @@ Als topic "other":
 - search_query: "".
 - question_short: zeg welk vak het lijkt, zonder de vraag te beantwoorden. Zeg erbij: NaSk, toetsen en samenvattingen mag wel.
 
-Houd elk veld kort (max 4 zinnen).`;
+Houd elk veld kort (max 3 zinnen). Antwoorden: rustig, schoolbord-stijl.`;
 
 type ContentPart =
   | { type: "text"; text: string }
