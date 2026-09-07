@@ -333,3 +333,196 @@ Beantwoord alleen de wedervraag. Geen eindantwoord. JSON volgens schema.`;
     return { ok: false, error: "Wedervraag lukte niet. Probeer het nog eens." };
   }
 }
+
+const DEEPER_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["explanation"],
+  properties: {
+    explanation: { type: "string" },
+  },
+} as const;
+
+const DEEPER_PROMPT = `Je bent Oswald, NaSk-hulpleraar van Nick Oswald (VMBO). De leerling snapte het antwoord nog niet en wil een diepere uitleg.
+
+Regels:
+- Nederlands. Korte zinnen. Simpele woorden. VMBO-niveau.
+- Leg het nog eens uit in eigen woorden. Geen letterlijke dump uit het antwoordenboek.
+- Gebruik een analogie of stappen als dat helpt.
+- Max ongeveer 6–8 korte zinnen. Geen emoji.
+- Focus op begrip, geen college.`;
+
+export async function generateDeeperExplanation(input: {
+  questionShort: string;
+  modelAnswer: string;
+  explanation: string;
+}): Promise<{ ok: true; explanation: string } | { ok: false; error: string }> {
+  const apiKey = process.env.XAI_API_KEY;
+  if (!apiKey) {
+    return { ok: false, error: "Hulp is nu even niet beschikbaar. Probeer het later of vraag je docent." };
+  }
+
+  const user = `Opdracht (kort): ${input.questionShort || "(foto)"}
+
+Antwoord dat de leerling al zag:
+${input.modelAnswer}
+
+Uitleg die de leerling al zag:
+${input.explanation || "(geen)"}
+
+Geef een diepere uitleg in eigen woorden op VMBO-niveau. JSON volgens schema.`;
+
+  const body = {
+    model: "grok-4.20-0309-non-reasoning",
+    temperature: 0.4,
+    max_tokens: 500,
+    messages: [
+      { role: "system", content: DEEPER_PROMPT },
+      { role: "user", content: user },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "diepere_uitleg",
+        strict: true,
+        schema: DEEPER_SCHEMA,
+      },
+    },
+  };
+
+  try {
+    const res = await fetch("https://api.x.ai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      return { ok: false, error: "Diepere uitleg lukte niet. Probeer het nog eens." };
+    }
+    const json = (await res.json()) as {
+      choices?: { message?: { content?: string } }[];
+    };
+    const raw = json.choices?.[0]?.message?.content ?? "";
+    const cleaned = raw
+      .trim()
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/\s*```$/i, "");
+    const data = JSON.parse(cleaned) as { explanation?: string };
+    if (!data.explanation || typeof data.explanation !== "string") {
+      return { ok: false, error: "Het antwoord was onduidelijk. Probeer het nog eens." };
+    }
+    return { ok: true, explanation: data.explanation.trim() };
+  } catch {
+    return { ok: false, error: "Diepere uitleg lukte niet. Probeer het nog eens." };
+  }
+}
+
+const PRACTICE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["question", "model_answer", "explanation"],
+  properties: {
+    question: { type: "string" },
+    model_answer: { type: "string" },
+    explanation: { type: "string" },
+  },
+} as const;
+
+const PRACTICE_PROMPT = `Je bent Oswald, NaSk-hulpleraar van Nick Oswald (VMBO). Maak één oefenvraag die dezelfde vaardigheid oefent als de originele vraag, maar met nieuwe getallen of namen.
+
+Regels:
+- Nederlands. Korte zinnen. VMBO-niveau.
+- Zelfde soort vaardigheid/formule/begrip; nieuwe context of getallen.
+- question: de oefenvraag (1–4 zinnen).
+- model_answer: kort nakijkantwoord (getal/keuze/a.b.c.).
+- explanation: korte uitleg (2–4 zinnen), in eigen woorden.
+- Geen emoji. Geen letterlijke kopie van de originele vraag.`;
+
+export async function generatePracticeQuestion(input: {
+  questionShort: string;
+  modelAnswer: string;
+  explanation: string;
+}): Promise<
+  | { ok: true; question: string; modelAnswer: string; explanation: string }
+  | { ok: false; error: string }
+> {
+  const apiKey = process.env.XAI_API_KEY;
+  if (!apiKey) {
+    return { ok: false, error: "Hulp is nu even niet beschikbaar. Probeer het later of vraag je docent." };
+  }
+
+  const user = `Originele opdracht (kort): ${input.questionShort || "(foto)"}
+
+Origineel antwoord:
+${input.modelAnswer}
+
+Originele uitleg:
+${input.explanation || "(geen)"}
+
+Maak één vergelijkbare oefenvraag met nieuwe getallen/namen. JSON volgens schema.`;
+
+  const body = {
+    model: "grok-4.20-0309-non-reasoning",
+    temperature: 0.5,
+    max_tokens: 700,
+    messages: [
+      { role: "system", content: PRACTICE_PROMPT },
+      { role: "user", content: user },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "oefenvraag",
+        strict: true,
+        schema: PRACTICE_SCHEMA,
+      },
+    },
+  };
+
+  try {
+    const res = await fetch("https://api.x.ai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      return { ok: false, error: "Oefenvraag maken lukte niet. Probeer het nog eens." };
+    }
+    const json = (await res.json()) as {
+      choices?: { message?: { content?: string } }[];
+    };
+    const raw = json.choices?.[0]?.message?.content ?? "";
+    const cleaned = raw
+      .trim()
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/\s*```$/i, "");
+    const data = JSON.parse(cleaned) as {
+      question?: string;
+      model_answer?: string;
+      explanation?: string;
+    };
+    if (
+      !data.question ||
+      typeof data.question !== "string" ||
+      !data.model_answer ||
+      typeof data.model_answer !== "string" ||
+      typeof data.explanation !== "string"
+    ) {
+      return { ok: false, error: "Het antwoord was onduidelijk. Probeer het nog eens." };
+    }
+    return {
+      ok: true,
+      question: data.question.trim(),
+      modelAnswer: data.model_answer.trim(),
+      explanation: data.explanation.trim(),
+    };
+  } catch {
+    return { ok: false, error: "Oefenvraag maken lukte niet. Probeer het nog eens." };
+  }
+}

@@ -16,9 +16,11 @@ import {
 import {
   advanceStepFn,
   askHelpFn,
+  deeperExplanationFn,
+  practiceQuestionFn,
   revealAnswerFn,
 } from "@/lib/oswald.functions";
-import type { AnswerView, StepView, WinkView } from "@/lib/types";
+import type { AnswerView, PracticeQuestionView, StepView, WinkView } from "@/lib/types";
 import { compressImage, searchLinks } from "@/lib/utils";
 
 /** Zet a./b./c. op eigen regels als het model ze op één regel plakte. */
@@ -49,6 +51,13 @@ export function StudentApp() {
   const [answer, setAnswer] = useState<AnswerView | null>(null);
   const [wink, setWink] = useState<WinkView | null>(null);
   const [otherMessage, setOtherMessage] = useState("");
+  const [deeperExplanation, setDeeperExplanation] = useState<string | null>(null);
+  const [deeperUsed, setDeeperUsed] = useState(false);
+  const [deeperLoading, setDeeperLoading] = useState(false);
+  const [practice, setPractice] = useState<PracticeQuestionView | null>(null);
+  const [practiceUsed, setPracticeUsed] = useState(false);
+  const [practiceLoading, setPracticeLoading] = useState(false);
+  const [practiceAnswerShown, setPracticeAnswerShown] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -116,6 +125,11 @@ export function StudentApp() {
       setAnswer(null);
       setWink(null);
       setOtherMessage("");
+      setDeeperExplanation(null);
+      setDeeperUsed(false);
+      setPractice(null);
+      setPracticeUsed(false);
+      setPracticeAnswerShown(false);
       if (res.kind === "other") {
         setOtherMessage(res.message);
         setScreen("other");
@@ -184,9 +198,71 @@ export function StudentApp() {
     setAnswer(null);
     setWink(null);
     setOtherMessage("");
+    setDeeperExplanation(null);
+    setDeeperUsed(false);
+    setDeeperLoading(false);
+    setPractice(null);
+    setPracticeUsed(false);
+    setPracticeLoading(false);
+    setPracticeAnswerShown(false);
     setSessionId("");
     sessionStorage.removeItem(SESSION_KEY);
     setScreen("form");
+  }
+
+  async function onDeeperExplanation() {
+    if (!answer || deeperUsed || deeperLoading) return;
+    setDeeperLoading(true);
+    try {
+      const res = await deeperExplanationFn({
+        data: {
+          sessionId: sessionId || undefined,
+          questionShort: answer.questionShort,
+          modelAnswer: answer.modelAnswer,
+          explanation: answer.explanation,
+        },
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setDeeperExplanation(res.explanation);
+      setDeeperUsed(true);
+    } catch {
+      toast.error("Diepere uitleg lukte niet. Probeer het nog eens.");
+    } finally {
+      setDeeperLoading(false);
+    }
+  }
+
+  async function onPracticeQuestion() {
+    if (!answer || practiceUsed || practiceLoading) return;
+    setPracticeLoading(true);
+    try {
+      const res = await practiceQuestionFn({
+        data: {
+          sessionId: sessionId || undefined,
+          questionShort: answer.questionShort,
+          modelAnswer: answer.modelAnswer,
+          explanation: answer.explanation,
+        },
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setPractice({
+        question: res.question,
+        modelAnswer: res.modelAnswer,
+        explanation: res.explanation,
+      });
+      setPracticeUsed(true);
+      setPracticeAnswerShown(false);
+    } catch {
+      toast.error("Oefenvraag maken lukte niet. Probeer het nog eens.");
+    } finally {
+      setPracticeLoading(false);
+    }
   }
 
   return (
@@ -373,6 +449,80 @@ export function StudentApp() {
                 <p className="mt-2 whitespace-pre-line text-sm leading-relaxed">{answer.explanation}</p>
               </div>
             ) : null}
+            {deeperExplanation ? (
+              <div className="rounded-[var(--radius-lg)] bg-paper px-4 py-4 leading-relaxed text-fg">
+                <p className="text-xs font-bold uppercase tracking-wide text-leaf">Nog meer uitleg</p>
+                <p className="mt-2 whitespace-pre-line text-sm leading-relaxed">{deeperExplanation}</p>
+              </div>
+            ) : null}
+            {practice ? (
+              <div className="grid gap-3 rounded-[var(--radius-lg)] bg-surface px-4 py-4">
+                <p className="text-xs font-bold uppercase tracking-wide text-leaf">Oefenvraag</p>
+                <p className="whitespace-pre-line text-sm leading-relaxed text-fg">{practice.question}</p>
+                {!practiceAnswerShown ? (
+                  <Button
+                    type="button"
+                    size="md"
+                    variant="paper"
+                    className="w-fit"
+                    onClick={() => setPracticeAnswerShown(true)}
+                  >
+                    Toon oefenantwoord
+                  </Button>
+                ) : (
+                  <div className="grid gap-3">
+                    <div className="rounded-[var(--radius-lg)] bg-primary px-4 py-3 text-primary-fg">
+                      <p className="text-xs font-semibold uppercase tracking-wide opacity-70">
+                        Oefenantwoord
+                      </p>
+                      <p className="mt-2 whitespace-pre-line text-sm font-semibold leading-relaxed">
+                        {formatModelAnswer(practice.modelAnswer)}
+                      </p>
+                    </div>
+                    {practice.explanation?.trim() ? (
+                      <div className="rounded-[var(--radius-lg)] bg-paper px-4 py-3 leading-relaxed text-fg">
+                        <p className="text-xs font-bold uppercase tracking-wide text-leaf">Uitleg</p>
+                        <p className="mt-2 whitespace-pre-line text-sm leading-relaxed">
+                          {practice.explanation}
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            ) : null}
+            <div className="grid gap-2">
+              {!deeperUsed ? (
+                <Button
+                  type="button"
+                  size="lg"
+                  variant="paper"
+                  loading={deeperLoading}
+                  disabled={deeperLoading}
+                  onClick={onDeeperExplanation}
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-lg font-extrabold">Ik snap het nog niet</span>
+                    <span className="block text-sm font-medium opacity-70">Nog meer uitleg</span>
+                  </span>
+                </Button>
+              ) : null}
+              {!practiceUsed ? (
+                <Button
+                  type="button"
+                  size="lg"
+                  variant="paper"
+                  loading={practiceLoading}
+                  disabled={practiceLoading}
+                  onClick={onPracticeQuestion}
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-lg font-extrabold">Oefenvraag</span>
+                    <span className="block text-sm font-medium opacity-70">Zelfde vaardigheid, nieuw voorbeeld</span>
+                  </span>
+                </Button>
+              ) : null}
+            </div>
             <Button type="button" size="lg" variant="primary" onClick={onNewQuestion}>
               <span className="min-w-0 flex-1">
                 <span className="block text-lg font-extrabold">Nieuwe vraag</span>

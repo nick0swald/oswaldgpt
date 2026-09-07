@@ -48,3 +48,9 @@ export type DayStat = {
   answers: number;
   avgSeconds: number | null;
 };
+
+export type PracticeQuestionView = {
+  question: string;
+  modelAnswer: string;
+  explanation: string;
+};

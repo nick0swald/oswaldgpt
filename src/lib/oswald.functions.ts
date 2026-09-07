@@ -117,3 +117,39 @@ export const removeNameFn = createServerFn({ method: "POST" })
     const { removeRosterName } = await import("./oswald.server");
     return removeRosterName(data.pin, data.name);
   });
+
+export const deeperExplanationFn = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      sessionId: z.string().max(80).optional(),
+      questionShort: z.string().max(400),
+      modelAnswer: z.string().max(2000),
+      explanation: z.string().max(4000),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const { generateDeeperExplanation } = await import("./ai.server");
+    return generateDeeperExplanation({
+      questionShort: data.questionShort,
+      modelAnswer: data.modelAnswer,
+      explanation: data.explanation,
+    });
+  });
+
+export const practiceQuestionFn = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      sessionId: z.string().max(80).optional(),
+      questionShort: z.string().max(400),
+      modelAnswer: z.string().max(2000),
+      explanation: z.string().max(4000),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const { generatePracticeQuestion } = await import("./ai.server");
+    return generatePracticeQuestion({
+      questionShort: data.questionShort,
+      modelAnswer: data.modelAnswer,
+      explanation: data.explanation,
+    });
+  });
