@@ -109,6 +109,41 @@ function clip(parts: string[], max = MAX_CHARS): string {
   return out.trim();
 }
 
+
+function pickBestPage(
+  pages: BookPage[],
+  question: string | undefined,
+  sliced: string,
+): { page: number; where: "boven" | "midden" | "onder" } {
+  const q = question?.trim() ?? "";
+  let best = pages[0];
+  let bestScore = -1;
+  for (const p of pages) {
+    let score = 0;
+    if (sliced.includes(`--- pagina ${p.p} `)) score += 2;
+    if (q) {
+      const re = new RegExp(`(?:^|\\n)\\s*(?:opdracht(?:en)?\\s+|vraag\\s+)?${q}(?=\\s|\\n|$)`, "i");
+      const m = p.t.search(re);
+      if (m >= 0) score += 5;
+      if (sliced.includes(p.t.slice(0, Math.min(50, p.t.length)))) score += 1;
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      best = p;
+    }
+  }
+  let where: "boven" | "midden" | "onder" = "midden";
+  if (q && best) {
+    const re = new RegExp(`(?:^|\\n)\\s*(?:opdracht(?:en)?\\s+|vraag\\s+)?${q}(?=\\s|\\n|$)`, "i");
+    const m = best.t.search(re);
+    if (m >= 0 && best.t.length > 0) {
+      const r = m / best.t.length;
+      where = r < 0.33 ? "boven" : r < 0.66 ? "midden" : "onder";
+    }
+  }
+  return { page: best?.p ?? pages[0]?.p ?? 0, where };
+}
+
 export function answerBookExcerpt(input: {
   series?: NovaSeries;
   chapter?: string;
@@ -138,12 +173,9 @@ export function answerBookExcerpt(input: {
         .map((p) => `--- pagina ${p.p} (hst ${p.h ?? "?"}, par ${p.s ?? "?"}) ---\n${p.t}`)
         .join("\n\n");
       const sliced = sliceQuestion(body, question);
-      const pageHint = pages
-        .filter((p) => !question || sliced.includes(p.t.slice(0, 40)) || sliced.includes(`pagina ${p.p}`))
-        .map((p) => p.p);
-      const uniqPages = [...new Set(pageHint.length ? pageHint : pages.map((p) => p.p))];
+      const best = pickBestPage(pages, question, sliced);
       chunks.push(
-        `${header} Pagina's in dit stuk: ${uniqPages.join(", ")}.\n${sliced}`,
+        `${header} Beste pagina: ${best.page} (${best.where} op de pagina). Noem precies deze ene pagina + plek in stap 1 — geen bereik.\n${sliced}`,
       );
       if (clip(chunks).length >= MAX_CHARS) break;
     }
