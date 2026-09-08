@@ -97,7 +97,7 @@ Als topic "wink":
 - answer.model_answer: kort, begrijpelijk VMBO-antwoord (tot ~5 zinnen mag bij lastige heelal-vragen). Natuurkunde mag altijd — wees behulpzaam.
 - Bij aliens/Fermi: natuurkundig/rationeel kader (afstanden, signalen, waarschijnlijkheid), geen complot of horror.
 - answer.explanation: korte note ZONDER "knipoog", bijv. "Dit is wel natuurkunde, maar niet van onze les."
-- PG-13: geen expliciete seks, geen geweldsinstructies, geen gevaarlijke experimenten om na te doen.
+- PG-13: geen expliciete seks, geen geweldsinstructies, geen gevaarlijke experimenten om na te doen. Persoon die valt/botst/letsel: som ok, maar verwoord als een voorwerp — niet luguber.
 - search_query: korte Nederlandse zoekzin.
 - Gebruik NOOIT het woord knipoog/Knipoog.
 
@@ -106,6 +106,11 @@ Als topic "other":
 - answer.explanation: kort en droog, bijv. "Oswald helpt alleen bij NaSk — geen kletspraat over de docent." of "Dat is geen natuurkundevraag."
 - search_query: "".
 - question_short: één zin: dit is geen NaSk-vraag; welkom terug met een som/begrip/Nova-plek.
+
+Toon bij ongelukken (niet te luguber):
+- De natuurkunde mag. Geen gore details (bloed, botten, dood, pijn, wat het lichaam overkomt).
+- Vraag over een persoon die valt, botst, verbrandt of letsel oploopt: beantwoord de som, maar draai de situatie in antwoord én uitleg om naar een voorwerp (een steen, een bal, een kist). Noem de persoon niet als slachtoffer. Geen grap over veiligheid bij zo'n val.
+- Voorbeeld: "dhr X valt van een flat van 120 m" → reken alsof een steen van 120 m valt. Zeg kort dat je het zo omzet.
 
 Hints en model_answer: beknopt. explanation bij rekenen: iets ruimer, wel op niveau. Rustig, schoolbord-stijl.`;
 
@@ -274,7 +279,7 @@ Regels:
 - Nederlands. Kort. Op niveau. Geen emoji.
 - Geef een behulpzaam, kort antwoord (mag wel een beetje uitleg).
 - Noem eventueel dat het niet van onze les is — NOOIT het woord knipoog.
-- PG-13: geen expliciete seks, geen gewelds-/explosieven-howto, geen gevaarlijke experimenten om na te doen.
+- PG-13: geen expliciete seks, geen gewelds-/explosieven-howto, geen gevaarlijke experimenten om na te doen. Geen lugubere details; persoon-in-gevaar verwoord je als een voorwerp.
 - Max 5 zinnen.`;
 
 export async function generateFollowup(input: {
@@ -371,7 +376,8 @@ Regels:
 - Leg het nog eens uit in eigen woorden. Geen letterlijke dump uit het antwoordenboek.
 - Gebruik een analogie of stappen als dat helpt.
 - Max ongeveer 6–8 korte zinnen. Geen emoji.
-- Focus op begrip, geen college.`;
+- Focus op begrip, geen college.
+- Niet luguber. Gaat de som over een persoon die valt of letsel oploopt: praat over een voorwerp (steen, bal, kist), geen lichaamsschade.`;
 
 export async function generateDeeperExplanation(input: {
   questionShort: string;
@@ -460,7 +466,8 @@ Regels:
 - question: de oefenvraag (1–4 zinnen).
 - model_answer: kort nakijkantwoord (getal/keuze/a.b.c.).
 - explanation: korte uitleg (2–4 zinnen), in eigen woorden.
-- Geen emoji. Geen letterlijke kopie van de originele vraag.`;
+- Geen emoji. Geen letterlijke kopie van de originele vraag.
+- NOOIT een situatie waarin een persoon valt, botst, verbrandt of letsel oploopt — ook niet als de originele vraag dat deed. Zelfde formule, veilige context: een steen, een bal, een kist, een appel. Geen bloed, dood of pijn.`;
 
 export async function generatePracticeQuestion(input: {
   questionShort: string;
@@ -483,7 +490,7 @@ ${input.modelAnswer}
 Originele uitleg:
 ${input.explanation || "(geen)"}
 
-Maak één vergelijkbare oefenvraag met nieuwe getallen/namen. JSON volgens schema.`;
+Maak één vergelijkbare oefenvraag met nieuwe getallen. Als de originele vraag over een vallende of gewonde persoon gaat: gebruik een voorwerp, nooit opnieuw een persoon. JSON volgens schema.`;
 
   const body = {
     model: "grok-4.20-0309-non-reasoning",
