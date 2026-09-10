@@ -1,4 +1,4 @@
-import { ArrowRight, RotateCcw, Scan, X } from "lucide-react";
+import { ArrowRight, Download, RotateCcw, Scan, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { PledgeBanner } from "@/components/pledge-banner";
@@ -13,6 +13,15 @@ import {
   SESSION_KEY,
   SHOW_PLEDGE,
 } from "@/lib/defaults";
+import {
+  downloadHuiswerkChatlog,
+  HUISWERK_SESSION_KEY,
+  isHuiswerkModusEnabled,
+  loadHuiswerkLog,
+  saveHuiswerkLog,
+  shortText,
+  type HuiswerkLogEntry,
+} from "@/lib/huiswerk";
 import {
   advanceStepFn,
   askFollowupFn,
@@ -62,6 +71,10 @@ export function StudentApp() {
   const [winkFollowups, setWinkFollowups] = useState<{ question: string; reply: string }[]>([]);
   const [winkAsk, setWinkAsk] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const huiswerkEnabled = isHuiswerkModusEnabled();
+  const [huiswerkActive, setHuiswerkActive] = useState(false);
+  const [huiswerkLog, setHuiswerkLog] = useState<HuiswerkLogEntry[]>([]);
+  const huiswerkActiveRef = useRef(false);
 
   useEffect(() => {
     const storedPledge = sessionStorage.getItem(PLEDGE_KEY);
@@ -72,7 +85,59 @@ export function StudentApp() {
     if (storedBest) setDaBest(true);
     if (storedName) setName(storedName);
     if (storedClass && CLASSES.some((c) => c.code === storedClass)) setClassCode(storedClass);
-  }, []);
+    if (huiswerkEnabled) {
+      const active = sessionStorage.getItem(HUISWERK_SESSION_KEY) === "1";
+      huiswerkActiveRef.current = active;
+      setHuiswerkActive(active);
+      setHuiswerkLog(loadHuiswerkLog());
+    }
+  }, [huiswerkEnabled]);
+
+  function appendHuiswerkLog(label: string, detail?: string) {
+    if (!huiswerkActiveRef.current) return;
+    const entry: HuiswerkLogEntry = {
+      at: new Date().toISOString(),
+      label,
+      ...(detail?.trim() ? { detail: shortText(detail) } : {}),
+    };
+    setHuiswerkLog((prev) => {
+      const next = [...prev, entry];
+      saveHuiswerkLog(next);
+      return next;
+    });
+  }
+
+  function onToggleHuiswerk() {
+    if (huiswerkActiveRef.current) {
+      huiswerkActiveRef.current = false;
+      setHuiswerkActive(false);
+      sessionStorage.removeItem(HUISWERK_SESSION_KEY);
+      return;
+    }
+    huiswerkActiveRef.current = true;
+    setHuiswerkActive(true);
+    sessionStorage.setItem(HUISWERK_SESSION_KEY, "1");
+    const entry: HuiswerkLogEntry = {
+      at: new Date().toISOString(),
+      label: "Huiswerkmodus gestart",
+      detail: [name.trim() && `naam ${name.trim()}`, classCode && `klas ${classCode}`]
+        .filter(Boolean)
+        .join(", ") || undefined,
+    };
+    setHuiswerkLog((prev) => {
+      const next = prev.length ? [...prev, entry] : [entry];
+      saveHuiswerkLog(next);
+      return next;
+    });
+  }
+
+  function onDownloadChatlog() {
+    if (huiswerkLog.length === 0) {
+      toast.error("Nog geen chatlog. Werk eerst in huiswerkmodus.");
+      return;
+    }
+    downloadHuiswerkChatlog({ name, classCode, entries: huiswerkLog });
+  }
 
   function onAcceptPledge(best: boolean) {
     sessionStorage.setItem(PLEDGE_KEY, "help");
@@ -135,13 +200,20 @@ export function StudentApp() {
       setPracticeList([]);
       setPracticeCount(0);
       setPracticeRevealed({});
+      const vraagTekst = question.trim() || (image ? "[foto]" : "");
+      appendHuiswerkLog("Vraag", vraagTekst);
       if (res.kind === "other") {
         setOtherMessage(res.message);
+        appendHuiswerkLog("Bericht (ander vak)", res.message);
         setScreen("other");
         return;
       }
       if (res.kind === "wink") {
         setWink(res.wink);
+        appendHuiswerkLog(
+          "Knipoog",
+          res.wink.simpleAnswer || res.wink.wink || res.wink.questionShort,
+        );
         setScreen("wink");
         return;
       }
@@ -149,6 +221,13 @@ export function StudentApp() {
       setStep(res.steps[0] ?? res.step);
       setHints(res.steps[0] ? [res.steps[0]] : [res.step]);
       setPackedSteps(res.steps);
+      {
+        const first = res.steps[0] ?? res.step;
+        appendHuiswerkLog(
+          `Hint ${first.step}${first.title ? ` · ${first.title}` : ""}`,
+          first.help || first.tip,
+        );
+      }
       setScreen("help");
     } catch {
       toast.error("Hulp ophalen lukte niet. Probeer het nog eens.");
@@ -163,6 +242,10 @@ export function StudentApp() {
     if (next) {
       setStep(next);
       setHints((prev) => [...prev.filter((h) => h.step !== next.step), next]);
+      appendHuiswerkLog(
+        `Hint ${next.step}${next.title ? ` · ${next.title}` : ""}`,
+        next.help || next.tip,
+      );
       if (sessionId) void advanceStepFn({ data: { sessionId } }).catch(() => undefined);
       return;
     }
@@ -172,6 +255,10 @@ export function StudentApp() {
       if (!res.ok) return;
       setStep(res.step);
       setHints((prev) => [...prev.filter((h) => h.step !== res.step.step), res.step]);
+      appendHuiswerkLog(
+        `Hint ${res.step.step}${res.step.title ? ` · ${res.step.title}` : ""}`,
+        res.step.help || res.step.tip,
+      );
     } catch {
       /* ignore — hints staan al op de pagina */
     }
@@ -179,12 +266,18 @@ export function StudentApp() {
 
 
   async function onReveal() {
-    if (answer) setScreen("answer");
+    let logged = false;
+    if (answer) {
+      appendHuiswerkLog("Antwoord getoond", answer.modelAnswer);
+      logged = true;
+      setScreen("answer");
+    }
     if (!sessionId) return;
     try {
       const res = await revealAnswerFn({ data: { sessionId } });
       if (res.ok) {
         setAnswer(res.answer);
+        if (!logged) appendHuiswerkLog("Antwoord getoond", res.answer.modelAnswer);
         setScreen("answer");
       } else if (!answer) {
         toast.error(res.error);
@@ -237,6 +330,7 @@ export function StudentApp() {
       }
       setDeeperExtras((prev) => [...prev, res.explanation]);
       setDeeperCount((n) => n + 1);
+      appendHuiswerkLog("Extra uitleg", res.explanation);
     } catch {
       toast.error("Diepere uitleg lukte niet. Probeer het nog eens.");
     } finally {
@@ -267,6 +361,7 @@ export function StudentApp() {
       }
       setPracticeList((prev) => [...prev, item]);
       setPracticeCount((n) => n + 1);
+      appendHuiswerkLog("Oefenvraag", item.question);
     } catch {
       toast.error("Oefenvraag maken lukte niet. Probeer het nog eens.");
     } finally {
@@ -296,6 +391,8 @@ export function StudentApp() {
         return;
       }
       setWinkFollowups((prev) => [...prev, res.followup]);
+      appendHuiswerkLog("Doorvraag", res.followup.question);
+      appendHuiswerkLog("Antwoord (doorvraag)", res.followup.reply);
       setWinkAsk("");
     } catch {
       toast.error("Doorvragen lukte niet.");
@@ -308,6 +405,45 @@ export function StudentApp() {
   return (
     <div className="grid min-w-0 gap-5">
       {SHOW_PLEDGE && !pledged ? <PledgeBanner onAccept={onAcceptPledge} /> : null}
+      {huiswerkEnabled ? (
+        <div className="grid gap-2 rounded-[var(--radius-lg)] bg-surface px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-semibold uppercase tracking-wide text-leaf">
+              Huiswerkmodus
+            </p>
+            <Button
+              type="button"
+              size="sm"
+              variant={huiswerkActive ? "brand" : "outline"}
+              onClick={onToggleHuiswerk}
+            >
+              {huiswerkActive ? "Aan" : "Start"}
+            </Button>
+          </div>
+          {huiswerkActive || huiswerkLog.length > 0 ? (
+            <>
+              <Button
+                type="button"
+                size="sm"
+                variant="paper"
+                className="w-fit"
+                disabled={huiswerkLog.length === 0}
+                onClick={onDownloadChatlog}
+              >
+                <Download />
+                Download chatlog
+              </Button>
+              <p className="text-xs leading-relaxed text-muted">
+                Mail of upload dit bestand naar je docent.
+              </p>
+            </>
+          ) : (
+            <p className="text-xs leading-relaxed text-muted">
+              Start om je hulp-sessie als chatlog te bewaren.
+            </p>
+          )}
+        </div>
+      ) : null}
       <div
         inert={SHOW_PLEDGE && !pledged ? true : undefined}
         className={SHOW_PLEDGE && !pledged ? "pointer-events-none" : undefined}
@@ -509,7 +645,10 @@ export function StudentApp() {
                     size="md"
                     variant="paper"
                     className="w-fit"
-                    onClick={() => setPracticeRevealed((prev) => ({ ...prev, [i]: true }))}
+                    onClick={() => {
+                      setPracticeRevealed((prev) => ({ ...prev, [i]: true }));
+                      appendHuiswerkLog("Oefenantwoord getoond", practice.modelAnswer);
+                    }}
                   >
                     Toon oefenantwoord
                   </Button>
