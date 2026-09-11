@@ -521,46 +521,6 @@ export function StudentApp() {
               />
             </div>
 
-            {image ? (
-              <div className="relative overflow-hidden rounded-[var(--radius-lg)] bg-paper">
-                <img
-                  src={image}
-                  alt="Snap van de vraag"
-                  className="max-h-56 w-full object-contain"
-                />
-                <button
-                  type="button"
-                  className="absolute right-2 top-2 inline-flex size-11 items-center justify-center rounded-full bg-bg text-fg"
-                  onClick={() => setImage(null)}
-                  aria-label="Snap verwijderen"
-                >
-                  <X className="size-4" />
-                </button>
-              </div>
-            ) : null}
-
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-              className="hidden"
-              tabIndex={-1}
-              onChange={(e) => {
-                void onPickFile(e.target.files?.[0]);
-                e.target.value = "";
-              }}
-            />
-            <Button
-              type="button"
-              variant="primary"
-              size="md"
-              className="w-fit px-6"
-              onClick={() => fileRef.current?.click()}
-            >
-              <Scan />
-              Snap je vraag
-            </Button>
-
             <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
               <div className="min-w-0">
                 <Label htmlFor="klas">Klas</Label>
@@ -684,6 +644,46 @@ export function StudentApp() {
                 </div>
               </div>
             </div>
+
+            {image ? (
+              <div className="relative overflow-hidden rounded-[var(--radius-lg)] bg-paper">
+                <img
+                  src={image}
+                  alt="Snap van de vraag"
+                  className="max-h-56 w-full object-contain"
+                />
+                <button
+                  type="button"
+                  className="absolute right-2 top-2 inline-flex size-11 items-center justify-center rounded-full bg-bg text-fg"
+                  onClick={() => setImage(null)}
+                  aria-label="Snap verwijderen"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            ) : null}
+
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+              className="hidden"
+              tabIndex={-1}
+              onChange={(e) => {
+                void onPickFile(e.target.files?.[0]);
+                e.target.value = "";
+              }}
+            />
+            <Button
+              type="button"
+              variant="primary"
+              size="md"
+              className="w-fit px-6"
+              onClick={() => fileRef.current?.click()}
+            >
+              <Scan />
+              Snap je vraag
+            </Button>
 
             <Button
               type="submit"
