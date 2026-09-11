@@ -61,6 +61,7 @@ export const STEP_TITLES = [
 export const SESSION_KEY = "oswald_session_id";
 export const NAME_KEY = "oswald_name";
 export const CLASS_KEY = "oswald_class";
+export const CHAPTER_KEY = "oswald_chapter";
 export const PIN_KEY = "oswald_docent_pin";
 export const PLEDGE_KEY = "oswald_pledge";
 export const BEST_KEY = "oswald_da_best";
