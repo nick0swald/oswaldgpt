@@ -14,6 +14,7 @@ import {
   SESSION_KEY,
   SHOW_PLEDGE,
 } from "@/lib/defaults";
+import { exercisesForParagraph } from "@/lib/answer-book";
 import { chaptersForClass } from "@/lib/nova";
 import {
   downloadHuiswerkChatlog,
@@ -430,6 +431,17 @@ export function StudentApp() {
   }
 
 
+  const paragraphExercises =
+    classCode && chapter && paragraph
+      ? exercisesForParagraph({
+          classCode,
+          chapter,
+          paragraph,
+        })
+      : [];
+  const selectedExercise = paragraphExercises.find((ex) => String(ex.n) === somNum);
+  const letterOptions = selectedExercise?.letters ?? [];
+
   return (
     <div className="grid min-w-0 gap-5">
       {SHOW_PLEDGE && !pledged ? <PledgeBanner onAccept={onAcceptPledge} /> : null}
@@ -498,19 +510,7 @@ export function StudentApp() {
               </p>
             </header>
 
-            <div className="min-w-0">
-              <Label htmlFor="naam">Jouw naam</Label>
-              <Input
-                id="naam"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                maxLength={40}
-                autoComplete="nickname"
-                className="border-2 border-[#4d9fff] focus-visible:border-[#4d9fff] focus-visible:ring-[#4d9fff]/50"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 rounded-[var(--radius-lg)] border border-border bg-surface/60 p-3 sm:p-4">
               <div className="min-w-0">
                 <Label htmlFor="klas">Klas</Label>
                 <Select
@@ -583,34 +583,49 @@ export function StudentApp() {
                   <Select
                     id="som"
                     value={somNum}
-                    disabled={!paragraph}
+                    disabled={!paragraph || paragraphExercises.length === 0}
                     onChange={(e) => {
-                      setSomNum(e.target.value);
-                      if (!e.target.value) setSomLetter("");
+                      const next = e.target.value;
+                      setSomNum(next);
+                      const ex = paragraphExercises.find((x) => String(x.n) === next);
+                      if (!next || !ex?.letters.length) setSomLetter("");
+                      else if (somLetter && !ex.letters.includes(somLetter)) setSomLetter("");
                     }}
                   >
                     <option value="">—</option>
-                    {Array.from({ length: 20 }, (_, i) => String(i + 1)).map((n) => (
-                      <option key={n} value={n}>
-                        {n}
+                    {paragraphExercises.map((ex) => (
+                      <option key={ex.n} value={String(ex.n)}>
+                        {ex.n}
                       </option>
                     ))}
                   </Select>
-                  <Select
-                    id="som-letter"
-                    value={somLetter}
-                    disabled={!somNum}
-                    aria-label="Som-letter"
-                    onChange={(e) => setSomLetter(e.target.value)}
-                    className="w-[4.5rem]"
-                  >
-                    <option value="">—</option>
-                    {["a", "b", "c", "d"].map((L) => (
-                      <option key={L} value={L}>
-                        {L}
-                      </option>
-                    ))}
-                  </Select>
+                  {letterOptions.length > 0 ? (
+                    <Select
+                      id="som-letter"
+                      value={somLetter}
+                      disabled={!somNum}
+                      aria-label="Som-letter"
+                      onChange={(e) => setSomLetter(e.target.value)}
+                      className="w-[4.5rem]"
+                    >
+                      <option value="">—</option>
+                      {letterOptions.map((L) => (
+                        <option key={L} value={L}>
+                          {L}
+                        </option>
+                      ))}
+                    </Select>
+                  ) : (
+                    <Select
+                      id="som-letter"
+                      value=""
+                      disabled
+                      aria-label="Som-letter"
+                      className="w-[4.5rem]"
+                    >
+                      <option value="">—</option>
+                    </Select>
+                  )}
                 </div>
               </div>
             </div>
@@ -622,6 +637,7 @@ export function StudentApp() {
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
                 placeholder="Optioneel: plak de vraag. Of kies hierboven klas → som."
+                className="min-h-32"
               />
             </div>
 
@@ -678,6 +694,18 @@ export function StudentApp() {
               </span>
               <ArrowRight />
             </Button>
+
+            <div className="min-w-0">
+              <Label htmlFor="naam">Jouw naam</Label>
+              <Input
+                id="naam"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                maxLength={40}
+                autoComplete="nickname"
+                className="border-2 border-[#4d9fff] focus-visible:border-[#4d9fff] focus-visible:ring-[#4d9fff]/50"
+              />
+            </div>
           </form>
         ) : null}
 

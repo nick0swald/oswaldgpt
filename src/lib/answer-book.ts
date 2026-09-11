@@ -1,4 +1,4 @@
-import type { NovaSeries } from "@/lib/nova";
+import { seriesForClass, type NovaSeries } from "@/lib/nova";
 import gt3a from "@/lib/nova-books/gt3-a.json";
 import gt3b from "@/lib/nova-books/gt3-b.json";
 import gt4a from "@/lib/nova-books/gt4-a.json";
@@ -203,4 +203,77 @@ export function answerBookExcerpt(input: {
   }
   scored.sort((a, b) => b.score - a.score);
   return clip(scored.slice(0, 3).map((s) => `${s.header}\n${s.text}`));
+}
+
+export type NovaExercise = { n: number; letters: string[] };
+
+/**
+ * Haalt echte som-nummers (+ deelvragen a–f) uit Nova-boektekst voor
+ * klas/serie + hoofdstuk + paragraaf. Nummers staan vaak alleen op een regel;
+ * deelvragen beginnen met a/b/c… (tab of spatie). Paginanummers worden genegeerd.
+ */
+export function exercisesForParagraph(input: {
+  classCode?: string;
+  series?: NovaSeries;
+  chapter: string | number;
+  paragraph: string | number;
+}): NovaExercise[] {
+  const chapter = typeof input.chapter === "number" ? input.chapter : parseN(String(input.chapter));
+  const paragraph =
+    typeof input.paragraph === "number" ? input.paragraph : parseN(String(input.paragraph));
+  if (!chapter || !paragraph) return [];
+
+  const series: NovaSeries | undefined =
+    input.series ??
+    (input.classCode?.trim() ? seriesForClass(input.classCode.trim()) : undefined);
+  if (!series) return [];
+
+  const pages = BOOKS.filter((b) => b.series === series).flatMap((b) =>
+    b.pages.filter((p) => p.h === chapter && p.s === paragraph),
+  );
+  if (!pages.length) return [];
+
+  const pageNoise = new Set<number>();
+  for (const p of pages) {
+    pageNoise.add(p.p);
+    pageNoise.add(p.p - 1);
+    pageNoise.add(p.p + 1);
+  }
+
+  const text = pages.map((p) => p.t).join("\n");
+  const found: NovaExercise[] = [];
+  let current: NovaExercise | null = null;
+
+  for (const raw of text.split("\n")) {
+    const line = raw.replace(/\u00a0/g, " ");
+    const numOnly = line.match(/^\s*(\d{1,2})\s*$/);
+    if (numOnly) {
+      const n = Number(numOnly[1]);
+      if (n >= 1 && n <= 30 && !pageNoise.has(n)) {
+        current = { n, letters: [] };
+        found.push(current);
+      }
+      continue;
+    }
+    if (!current) continue;
+    // Deelvraag: "a\t…", "a …", "a. …", "a) …" — niet "{ A" (meerkeuze).
+    const letter = line.match(/^\s*([a-f])(?:[\t ]|\.(?:\s|$)|\)(?:\s|$))/i);
+    if (letter) {
+      const L = letter[1].toLowerCase();
+      if (!current.letters.includes(L)) current.letters.push(L);
+    }
+  }
+
+  const byN = new Map<number, NovaExercise>();
+  for (const ex of found) {
+    const prev = byN.get(ex.n);
+    if (!prev) {
+      byN.set(ex.n, { n: ex.n, letters: [...ex.letters] });
+      continue;
+    }
+    for (const L of ex.letters) {
+      if (!prev.letters.includes(L)) prev.letters.push(L);
+    }
+  }
+  return [...byN.values()].sort((a, b) => a.n - b.n);
 }
