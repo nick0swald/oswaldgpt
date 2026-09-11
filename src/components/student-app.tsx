@@ -510,134 +510,14 @@ export function StudentApp() {
               </p>
             </header>
 
-            <div className="grid grid-cols-2 gap-3 rounded-[var(--radius-lg)] border border-border bg-surface/60 p-3 sm:p-4">
-              <div className="min-w-0">
-                <Label htmlFor="klas">Klas</Label>
-                <Select
-                  id="klas"
-                  value={classCode}
-                  onChange={(e) => {
-                    setClassCode(e.target.value);
-                    setChapter("");
-                    setParagraph("");
-                    setSomNum("");
-                    setSomLetter("");
-                  }}
-                >
-                  <option value="">—</option>
-                  {CLASSES.map((c) => (
-                    <option key={c.code} value={c.code}>
-                      {c.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="min-w-0">
-                <Label htmlFor="hoofdstuk">Hoofdstuk</Label>
-                <Select
-                  id="hoofdstuk"
-                  value={chapter}
-                  disabled={!classCode}
-                  onChange={(e) => {
-                    setChapter(e.target.value);
-                    setParagraph("");
-                    setSomNum("");
-                    setSomLetter("");
-                  }}
-                >
-                  <option value="">—</option>
-                  {(classCode ? chaptersForClass(classCode) : []).map((c) => (
-                    <option key={c.n} value={String(c.n)}>
-                      {`H${c.n} · ${c.title}`}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="min-w-0">
-                <Label htmlFor="paragraaf">Paragraaf</Label>
-                <Select
-                  id="paragraaf"
-                  value={paragraph}
-                  disabled={!chapter}
-                  onChange={(e) => {
-                    setParagraph(e.target.value);
-                    setSomNum("");
-                    setSomLetter("");
-                  }}
-                >
-                  <option value="">—</option>
-                  {(classCode && chapter
-                    ? chaptersForClass(classCode).find((c) => String(c.n) === chapter)
-                        ?.paragraphs ?? []
-                    : []
-                  ).map((p) => (
-                    <option key={p.n} value={String(p.n)}>
-                      {`§${p.n} · ${p.title}`}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="min-w-0">
-                <Label htmlFor="som">Som</Label>
-                <div className="grid grid-cols-[1fr_auto] gap-2">
-                  <Select
-                    id="som"
-                    value={somNum}
-                    disabled={!paragraph || paragraphExercises.length === 0}
-                    onChange={(e) => {
-                      const next = e.target.value;
-                      setSomNum(next);
-                      const ex = paragraphExercises.find((x) => String(x.n) === next);
-                      if (!next || !ex?.letters.length) setSomLetter("");
-                      else if (somLetter && !ex.letters.includes(somLetter)) setSomLetter("");
-                    }}
-                  >
-                    <option value="">—</option>
-                    {paragraphExercises.map((ex) => (
-                      <option key={ex.n} value={String(ex.n)}>
-                        {ex.n}
-                      </option>
-                    ))}
-                  </Select>
-                  {letterOptions.length > 0 ? (
-                    <Select
-                      id="som-letter"
-                      value={somLetter}
-                      disabled={!somNum}
-                      aria-label="Som-letter"
-                      onChange={(e) => setSomLetter(e.target.value)}
-                      className="w-[4.5rem]"
-                    >
-                      <option value="">—</option>
-                      {letterOptions.map((L) => (
-                        <option key={L} value={L}>
-                          {L}
-                        </option>
-                      ))}
-                    </Select>
-                  ) : (
-                    <Select
-                      id="som-letter"
-                      value=""
-                      disabled
-                      aria-label="Som-letter"
-                      className="w-[4.5rem]"
-                    >
-                      <option value="">—</option>
-                    </Select>
-                  )}
-                </div>
-              </div>
-            </div>
-
             <div>
               <Label htmlFor="vraag">Jouw vraag</Label>
               <Textarea
                 id="vraag"
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
-                placeholder="Optioneel: plak de vraag. Of kies hierboven klas → som."
-                className="min-h-32"
+                placeholder="Optioneel: plak de vraag. Of kies hieronder klas → som."
+                className="min-h-40"
               />
             </div>
 
@@ -680,6 +560,130 @@ export function StudentApp() {
               <Scan />
               Snap je vraag
             </Button>
+
+            <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
+              <div className="min-w-0">
+                <Label htmlFor="klas">Klas</Label>
+                <Select
+                  id="klas"
+                  value={classCode}
+                  className="h-10 px-3"
+                  onChange={(e) => {
+                    setClassCode(e.target.value);
+                    setChapter("");
+                    setParagraph("");
+                    setSomNum("");
+                    setSomLetter("");
+                  }}
+                >
+                  <option value="">—</option>
+                  {CLASSES.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="min-w-0">
+                <Label htmlFor="hoofdstuk">Hoofdstuk</Label>
+                <Select
+                  id="hoofdstuk"
+                  value={chapter}
+                  disabled={!classCode}
+                  className="h-10 px-3"
+                  onChange={(e) => {
+                    setChapter(e.target.value);
+                    setParagraph("");
+                    setSomNum("");
+                    setSomLetter("");
+                  }}
+                >
+                  <option value="">—</option>
+                  {(classCode ? chaptersForClass(classCode) : []).map((c) => (
+                    <option key={c.n} value={String(c.n)}>
+                      {`H${c.n} · ${c.title}`}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="min-w-0">
+                <Label htmlFor="paragraaf">Paragraaf</Label>
+                <Select
+                  id="paragraaf"
+                  value={paragraph}
+                  disabled={!chapter}
+                  className="h-10 px-3"
+                  onChange={(e) => {
+                    setParagraph(e.target.value);
+                    setSomNum("");
+                    setSomLetter("");
+                  }}
+                >
+                  <option value="">—</option>
+                  {(classCode && chapter
+                    ? chaptersForClass(classCode).find((c) => String(c.n) === chapter)
+                        ?.paragraphs ?? []
+                    : []
+                  ).map((p) => (
+                    <option key={p.n} value={String(p.n)}>
+                      {`§${p.n} · ${p.title}`}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="min-w-0">
+                <Label htmlFor="som">Som</Label>
+                <div className="grid grid-cols-[1fr_auto] gap-1.5">
+                  <Select
+                    id="som"
+                    value={somNum}
+                    disabled={!paragraph || paragraphExercises.length === 0}
+                    className="h-10 px-3"
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setSomNum(next);
+                      const ex = paragraphExercises.find((x) => String(x.n) === next);
+                      if (!next || !ex?.letters.length) setSomLetter("");
+                      else if (somLetter && !ex.letters.includes(somLetter)) setSomLetter("");
+                    }}
+                  >
+                    <option value="">—</option>
+                    {paragraphExercises.map((ex) => (
+                      <option key={ex.n} value={String(ex.n)}>
+                        {ex.n}
+                      </option>
+                    ))}
+                  </Select>
+                  {letterOptions.length > 0 ? (
+                    <Select
+                      id="som-letter"
+                      value={somLetter}
+                      disabled={!somNum}
+                      aria-label="Som-letter"
+                      onChange={(e) => setSomLetter(e.target.value)}
+                      className="h-10 w-[4.5rem] px-2"
+                    >
+                      <option value="">—</option>
+                      {letterOptions.map((L) => (
+                        <option key={L} value={L}>
+                          {L}
+                        </option>
+                      ))}
+                    </Select>
+                  ) : (
+                    <Select
+                      id="som-letter"
+                      value=""
+                      disabled
+                      aria-label="Som-letter"
+                      className="h-10 w-[4.5rem] px-2"
+                    >
+                      <option value="">—</option>
+                    </Select>
+                  )}
+                </div>
+              </div>
+            </div>
 
             <Button
               type="submit"
