@@ -16,6 +16,9 @@ export const askHelpFn = createServerFn({ method: "POST" })
       classCode: z.string().max(12).optional(),
       text: z.string().max(4000).optional(),
       imageDataUrl: z.string().max(1_500_000).optional(),
+      chapter: z.string().max(8).optional(),
+      paragraph: z.string().max(8).optional(),
+      questionNo: z.string().max(12).optional(),
     }),
   )
   .handler(async ({ data }) => {

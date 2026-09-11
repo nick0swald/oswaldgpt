@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/field";
 import {
   BEST_KEY,
+  CHAPTER_KEY,
   CLASSES,
   CLASS_KEY,
   NAME_KEY,
@@ -13,6 +14,7 @@ import {
   SESSION_KEY,
   SHOW_PLEDGE,
 } from "@/lib/defaults";
+import { chaptersForClass } from "@/lib/nova";
 import {
   downloadHuiswerkChatlog,
   HUISWERK_SESSION_KEY,
@@ -51,6 +53,10 @@ export function StudentApp() {
   const [daBest, setDaBest] = useState(false);
   const [name, setName] = useState("");
   const [classCode, setClassCode] = useState("");
+  const [chapter, setChapter] = useState("");
+  const [paragraph, setParagraph] = useState("");
+  const [somNum, setSomNum] = useState("");
+  const [somLetter, setSomLetter] = useState("");
   const [sessionId, setSessionId] = useState("");
   const [loading, setLoading] = useState(false);
   const [question, setQuestion] = useState("");
@@ -84,7 +90,16 @@ export function StudentApp() {
     if (SHOW_PLEDGE && storedPledge) setPledged(true);
     if (storedBest) setDaBest(true);
     if (storedName) setName(storedName);
-    if (storedClass && CLASSES.some((c) => c.code === storedClass)) setClassCode(storedClass);
+    if (storedClass && CLASSES.some((c) => c.code === storedClass)) {
+      setClassCode(storedClass);
+      const storedChapter = sessionStorage.getItem(CHAPTER_KEY) ?? "";
+      if (
+        storedChapter &&
+        chaptersForClass(storedClass).some((c) => String(c.n) === storedChapter)
+      ) {
+        setChapter(storedChapter);
+      }
+    }
     if (huiswerkEnabled) {
       const active = sessionStorage.getItem(HUISWERK_SESSION_KEY) === "1";
       huiswerkActiveRef.current = active;
@@ -174,11 +189,18 @@ export function StudentApp() {
         classCode?: string;
         text?: string;
         imageDataUrl?: string;
+        chapter?: string;
+        paragraph?: string;
+        questionNo?: string;
       } = {};
       if (name.trim()) payload.name = name.trim();
       if (classCode) payload.classCode = classCode;
       if (question.trim()) payload.text = question.trim();
       if (image) payload.imageDataUrl = image;
+      if (chapter) payload.chapter = chapter;
+      if (paragraph) payload.paragraph = paragraph;
+      const questionNo = somNum ? `${somNum}${somLetter}` : "";
+      if (questionNo) payload.questionNo = questionNo;
       const res = await askHelpFn({ data: payload });
       if (!res.ok) {
         toast.error(res.error);
@@ -187,6 +209,8 @@ export function StudentApp() {
       sessionStorage.setItem(SESSION_KEY, res.sessionId);
       sessionStorage.setItem(NAME_KEY, name.trim());
       sessionStorage.setItem(CLASS_KEY, classCode);
+      if (chapter) sessionStorage.setItem(CHAPTER_KEY, chapter);
+      else sessionStorage.removeItem(CHAPTER_KEY);
       setSessionId(res.sessionId);
       setHints([]);
       setStep(null);
@@ -476,7 +500,7 @@ export function StudentApp() {
                 id="vraag"
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
-                placeholder="Plak de vraag, of typ bijv. hst 9 par 1 vraag 3."
+                placeholder="Plak de vraag. Nova-plek kies je hieronder (of typ hst/par/vraag)."
               />
             </div>
 
@@ -534,15 +558,33 @@ export function StudentApp() {
               <ArrowRight />
             </Button>
 
+            <div className="min-w-0">
+              <Label htmlFor="naam">Jouw naam</Label>
+              <Input
+                id="naam"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                maxLength={40}
+                autoComplete="nickname"
+                className="border-2 border-[#4d9fff] focus-visible:border-[#4d9fff] focus-visible:ring-[#4d9fff]/50"
+              />
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div className="min-w-0">
                 <Label htmlFor="klas">Klas</Label>
                 <Select
                   id="klas"
                   value={classCode}
-                  onChange={(e) => setClassCode(e.target.value)}
+                  onChange={(e) => {
+                    setClassCode(e.target.value);
+                    setChapter("");
+                    setParagraph("");
+                    setSomNum("");
+                    setSomLetter("");
+                  }}
                 >
-                  <option value=""></option>
+                  <option value="">—</option>
                   {CLASSES.map((c) => (
                     <option key={c.code} value={c.code}>
                       {c.label}
@@ -551,15 +593,80 @@ export function StudentApp() {
                 </Select>
               </div>
               <div className="min-w-0">
-                <Label htmlFor="naam">Jouw naam</Label>
-                <Input
-                  id="naam"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  maxLength={40}
-                  autoComplete="nickname"
-                  className="border-2 border-[#4d9fff] focus-visible:border-[#4d9fff] focus-visible:ring-[#4d9fff]/50"
-                />
+                <Label htmlFor="hoofdstuk">Hoofdstuk</Label>
+                <Select
+                  id="hoofdstuk"
+                  value={chapter}
+                  disabled={!classCode}
+                  onChange={(e) => {
+                    setChapter(e.target.value);
+                    setParagraph("");
+                    setSomNum("");
+                    setSomLetter("");
+                  }}
+                >
+                  <option value="">—</option>
+                  {(classCode ? chaptersForClass(classCode) : []).map((c) => (
+                    <option key={c.n} value={String(c.n)}>
+                      {`H${c.n} · ${c.title}`}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="min-w-0">
+                <Label htmlFor="paragraaf">Paragraaf</Label>
+                <Select
+                  id="paragraaf"
+                  value={paragraph}
+                  disabled={!chapter}
+                  onChange={(e) => setParagraph(e.target.value)}
+                >
+                  <option value="">—</option>
+                  {(classCode && chapter
+                    ? chaptersForClass(classCode).find((c) => String(c.n) === chapter)
+                        ?.paragraphs ?? []
+                    : []
+                  ).map((p) => (
+                    <option key={p.n} value={String(p.n)}>
+                      {`§${p.n} · ${p.title}`}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="min-w-0">
+                <Label htmlFor="som">Som</Label>
+                <div className="grid grid-cols-[1fr_auto] gap-2">
+                  <Select
+                    id="som"
+                    value={somNum}
+                    onChange={(e) => {
+                      setSomNum(e.target.value);
+                      if (!e.target.value) setSomLetter("");
+                    }}
+                  >
+                    <option value="">—</option>
+                    {Array.from({ length: 20 }, (_, i) => String(i + 1)).map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </Select>
+                  <Select
+                    id="som-letter"
+                    value={somLetter}
+                    disabled={!somNum}
+                    aria-label="Som-letter"
+                    onChange={(e) => setSomLetter(e.target.value)}
+                    className="w-[4.5rem]"
+                  >
+                    <option value="">—</option>
+                    {["a", "b", "c", "d"].map((L) => (
+                      <option key={L} value={L}>
+                        {L}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
               </div>
             </div>
           </form>

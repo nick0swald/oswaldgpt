@@ -301,23 +301,36 @@ export function parseNovaFromText(text: string): {
   let paragraph: string | undefined;
   let question: string | undefined;
 
+  // h10 / H10 / hst 10 / hoofdstuk 10
   const h =
-    t.match(/(?:hoofdstuk|hst\.?)\s*(\d{1,2})\b/) ?? t.match(/(?:^|\s)h\s?(\d{1,2})\b/);
+    t.match(/(?:hoofdstuk|hst\.?)\s*(\d{1,2})\b/) ??
+    t.match(/(?:^|\s)h\s?(\d{1,2})\b/);
   if (h) chapter = h[1];
 
+  // par 2 / paragraaf 2 / §2
   const p = t.match(/(?:paragraaf|par\.?|§)\s*(\d{1,2})\b/);
   if (p) paragraph = p[1];
 
-  const q = t.match(/(?:vraagnummer|opdracht|vraag|opdr\.?)\s*(\d{1,2}[a-z]?)\b/i);
+  // opdracht 3 / vraag 3a / som 3 / opdr. 3
+  const q = t.match(
+    /(?:vraagnummer|opdracht|vraag|opdr\.?|som)\s*(\d{1,2}[a-d]?)\b/i,
+  );
   if (q) question = q[1];
 
+  // 10.2 / 10.2.3
   if (!chapter) {
-    const dotted = t.match(/\b(\d{1,2})\.(\d{1,2})(?:\.(\d{1,2}[a-z]?))?\b/);
+    const dotted = t.match(/\b(\d{1,2})\.(\d{1,2})(?:\.(\d{1,2}[a-d]?))?\b/);
     if (dotted) {
       chapter = dotted[1];
       paragraph = paragraph ?? dotted[2];
       if (dotted[3]) question = question ?? dotted[3];
     }
+  }
+
+  // Na hoofdstuk-context: losse "3a" / "12b" (niet 10.2 opnieuw pakken)
+  if (!question && chapter) {
+    const bare = t.match(/(?:^|\s)(\d{1,2}[a-d])\b(?!\.\d)/);
+    if (bare) question = bare[1];
   }
 
   return { chapter, paragraph, question };
