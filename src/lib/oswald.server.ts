@@ -408,6 +408,9 @@ export async function askHelp(input: {
   classCode?: string;
   text?: string;
   imageDataUrl?: string;
+  chapter?: string;
+  paragraph?: string;
+  questionNo?: string;
 }): Promise<SubmitResult> {
   const classCode = CLASS_CODES.includes(input.classCode as (typeof CLASS_CODES)[number])
     ? input.classCode!
@@ -472,15 +475,19 @@ export async function askHelp(input: {
   }
 
   const parsed = parseNovaFromText(text);
+  // Menuwaarden winnen van vrije-tekst parse (parse blijft fallback).
+  const chapter = input.chapter?.trim() || parsed.chapter;
+  const paragraph = input.paragraph?.trim() || parsed.paragraph;
+  const question = input.questionNo?.trim() || parsed.question;
   const inferredSeries = seriesFromQuery(text);
   const effectiveClass =
     classCode ||
     (inferredSeries === "gt4" ? "4GT" : inferredSeries === "gt3" ? "3.5G" : inferredSeries === "kgt12" ? "2.5G" : "");
   const novaContext = lookupNova({
     classCode: effectiveClass || classCode,
-    chapter: parsed.chapter,
-    paragraph: parsed.paragraph,
-    question: parsed.question,
+    chapter,
+    paragraph,
+    question,
   });
 
   let generated = await generateHelp({
@@ -489,9 +496,9 @@ export async function askHelp(input: {
     novaContext: novaContext || undefined,
     bookExcerpt: bookContext({
       classCode: effectiveClass || classCode,
-      chapter: parsed.chapter,
-      paragraph: parsed.paragraph,
-      question: parsed.question,
+      chapter,
+      paragraph,
+      question,
       query: text,
     }) || undefined,
   });
