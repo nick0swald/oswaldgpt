@@ -226,14 +226,17 @@ export async function submitQuestion(input: {
   }
 
   const parsed = parseNovaFromText(text);
+  const chapter = input.chapter?.trim() || parsed.chapter;
+  const paragraph = input.paragraph?.trim() || parsed.paragraph;
+  const question = input.questionNo?.trim() || parsed.question;
   const novaContext = lookupNova({
     classCode: session.class_code,
-    chapter: input.chapter || parsed.chapter,
-    paragraph: input.paragraph || parsed.paragraph,
-    question: input.questionNo || parsed.question,
+    chapter,
+    paragraph,
+    question,
   });
-  if (!text && !image) {
-    return { ok: false, error: "Plak de vraag of snap 'm." };
+  if (!text && !image && !(chapter && paragraph && question)) {
+    return { ok: false, error: "Kies som (met klas, hoofdstuk en paragraaf) of plak/snap de vraag." };
   }
   if (image && image.length > 1_500_000) {
     return { ok: false, error: "De foto is te groot. Maak een scherpere, kleinere foto." };
@@ -251,9 +254,9 @@ export async function submitQuestion(input: {
     novaContext: novaContext || undefined,
     bookExcerpt: bookContext({
       classCode: session.class_code,
-      chapter: input.chapter || parsed.chapter,
-      paragraph: input.paragraph || parsed.paragraph,
-      question: input.questionNo || parsed.question,
+      chapter,
+      paragraph,
+      question,
       query: text,
     }) || undefined,
   });
@@ -265,7 +268,6 @@ export async function submitQuestion(input: {
     const nudged = await generateHelp({
       text: `${text}\n\n(Classificeer als wink: natuurkunde buiten de les — kort antwoord op niveau, geen other.)`,
       imageDataUrl: image,
-      bookTitle: titles,
       novaContext: undefined,
     });
     if (nudged.ok && nudged.help.topic !== "other") {
@@ -422,8 +424,12 @@ export async function askHelp(input: {
 
   const text = input.text?.trim() ?? "";
   const image = input.imageDataUrl?.trim();
-  if (!text && !image) {
-    return { ok: false, error: "Plak de vraag of snap 'm." };
+  const menuChapter = input.chapter?.trim() ?? "";
+  const menuParagraph = input.paragraph?.trim() ?? "";
+  const menuQuestion = input.questionNo?.trim() ?? "";
+  const menuComplete = Boolean(menuChapter && menuParagraph && menuQuestion);
+  if (!text && !image && !menuComplete) {
+    return { ok: false, error: "Kies som (met klas, hoofdstuk en paragraaf) of plak/snap de vraag." };
   }
   if (image && image.length > 1_500_000) {
     return { ok: false, error: "De foto is te groot. Maak een scherpere, kleinere foto." };
@@ -476,9 +482,9 @@ export async function askHelp(input: {
 
   const parsed = parseNovaFromText(text);
   // Menuwaarden winnen van vrije-tekst parse (parse blijft fallback).
-  const chapter = input.chapter?.trim() || parsed.chapter;
-  const paragraph = input.paragraph?.trim() || parsed.paragraph;
-  const question = input.questionNo?.trim() || parsed.question;
+  const chapter = menuChapter || parsed.chapter;
+  const paragraph = menuParagraph || parsed.paragraph;
+  const question = menuQuestion || parsed.question;
   const inferredSeries = seriesFromQuery(text);
   const effectiveClass =
     classCode ||
@@ -510,7 +516,6 @@ export async function askHelp(input: {
     const nudged = await generateHelp({
       text: `${text}\n\n(Classificeer als wink: natuurkunde buiten de les — kort antwoord op niveau, geen other.)`,
       imageDataUrl: image,
-      bookTitle: titles,
       novaContext: undefined,
     });
     if (nudged.ok && nudged.help.topic !== "other") {

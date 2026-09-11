@@ -178,8 +178,10 @@ export function StudentApp() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!question.trim() && !image) {
-      toast.error("Plak de vraag of snap 'm.");
+    const questionNo = somNum ? `${somNum}${somLetter}` : "";
+    const menuComplete = Boolean(classCode && chapter && paragraph && questionNo);
+    if (!question.trim() && !image && !menuComplete) {
+      toast.error("Kies som (met klas, hoofdstuk en paragraaf) of plak/snap de vraag.");
       return;
     }
     setLoading(true);
@@ -199,7 +201,6 @@ export function StudentApp() {
       if (image) payload.imageDataUrl = image;
       if (chapter) payload.chapter = chapter;
       if (paragraph) payload.paragraph = paragraph;
-      const questionNo = somNum ? `${somNum}${somLetter}` : "";
       if (questionNo) payload.questionNo = questionNo;
       const res = await askHelpFn({ data: payload });
       if (!res.ok) {
@@ -224,7 +225,10 @@ export function StudentApp() {
       setPracticeList([]);
       setPracticeCount(0);
       setPracticeRevealed({});
-      const vraagTekst = question.trim() || (image ? "[foto]" : "");
+      const menuLabel =
+        menuComplete ? `H${chapter} §${paragraph} som ${questionNo}` : "";
+      const vraagTekst =
+        question.trim() || (image ? "[foto]" : "") || menuLabel;
       appendHuiswerkLog("Vraag", vraagTekst);
       if (res.kind === "other") {
         setOtherMessage(res.message);
@@ -494,70 +498,6 @@ export function StudentApp() {
               </p>
             </header>
 
-            <div>
-              <Label htmlFor="vraag">Jouw vraag</Label>
-              <Textarea
-                id="vraag"
-                value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-                placeholder="Plak de vraag. Nova-plek kies je hieronder (of typ hst/par/vraag)."
-              />
-            </div>
-
-            {image ? (
-              <div className="relative overflow-hidden rounded-[var(--radius-lg)] bg-paper">
-                <img
-                  src={image}
-                  alt="Snap van de vraag"
-                  className="max-h-56 w-full object-contain"
-                />
-                <button
-                  type="button"
-                  className="absolute right-2 top-2 inline-flex size-11 items-center justify-center rounded-full bg-bg text-fg"
-                  onClick={() => setImage(null)}
-                  aria-label="Snap verwijderen"
-                >
-                  <X className="size-4" />
-                </button>
-              </div>
-            ) : null}
-
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-              className="hidden"
-              tabIndex={-1}
-              onChange={(e) => {
-                void onPickFile(e.target.files?.[0]);
-                e.target.value = "";
-              }}
-            />
-            <Button
-              type="button"
-              variant="primary"
-              size="md"
-              className="w-fit px-6"
-              onClick={() => fileRef.current?.click()}
-            >
-              <Scan />
-              Snap je vraag
-            </Button>
-
-            <Button
-              type="submit"
-              size="lg"
-              variant="brand"
-              loading={loading}
-              className="min-h-[5.75rem] py-6 [&_svg]:size-8"
-            >
-              <span className="min-w-0 flex-1">
-                <span className="block text-2xl font-extrabold tracking-tight">Hulp</span>
-                <span className="block text-sm font-medium opacity-70">Eerst een hint</span>
-              </span>
-              <ArrowRight />
-            </Button>
-
             <div className="min-w-0">
               <Label htmlFor="naam">Jouw naam</Label>
               <Input
@@ -619,7 +559,11 @@ export function StudentApp() {
                   id="paragraaf"
                   value={paragraph}
                   disabled={!chapter}
-                  onChange={(e) => setParagraph(e.target.value)}
+                  onChange={(e) => {
+                    setParagraph(e.target.value);
+                    setSomNum("");
+                    setSomLetter("");
+                  }}
                 >
                   <option value="">—</option>
                   {(classCode && chapter
@@ -639,6 +583,7 @@ export function StudentApp() {
                   <Select
                     id="som"
                     value={somNum}
+                    disabled={!paragraph}
                     onChange={(e) => {
                       setSomNum(e.target.value);
                       if (!e.target.value) setSomLetter("");
@@ -669,6 +614,70 @@ export function StudentApp() {
                 </div>
               </div>
             </div>
+
+            <div>
+              <Label htmlFor="vraag">Jouw vraag</Label>
+              <Textarea
+                id="vraag"
+                value={question}
+                onChange={(e) => setQuestion(e.target.value)}
+                placeholder="Optioneel: plak de vraag. Of kies hierboven klas → som."
+              />
+            </div>
+
+            {image ? (
+              <div className="relative overflow-hidden rounded-[var(--radius-lg)] bg-paper">
+                <img
+                  src={image}
+                  alt="Snap van de vraag"
+                  className="max-h-56 w-full object-contain"
+                />
+                <button
+                  type="button"
+                  className="absolute right-2 top-2 inline-flex size-11 items-center justify-center rounded-full bg-bg text-fg"
+                  onClick={() => setImage(null)}
+                  aria-label="Snap verwijderen"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            ) : null}
+
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+              className="hidden"
+              tabIndex={-1}
+              onChange={(e) => {
+                void onPickFile(e.target.files?.[0]);
+                e.target.value = "";
+              }}
+            />
+            <Button
+              type="button"
+              variant="primary"
+              size="md"
+              className="w-fit px-6"
+              onClick={() => fileRef.current?.click()}
+            >
+              <Scan />
+              Snap je vraag
+            </Button>
+
+            <Button
+              type="submit"
+              size="lg"
+              variant="brand"
+              loading={loading}
+              className="min-h-[5.75rem] py-6 [&_svg]:size-8"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block text-2xl font-extrabold tracking-tight">Hulp</span>
+                <span className="block text-sm font-medium opacity-70">Eerst een hint</span>
+              </span>
+              <ArrowRight />
+            </Button>
           </form>
         ) : null}
 
