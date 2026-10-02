@@ -1,13 +1,23 @@
 #!/usr/bin/env python3
-"""Extract Nova antwoordenboeken to compact JSON for OswaldGPT (server-only)."""
+"""Extract Nova antwoordenboeken to compact JSON for OswaldGPT (server-only).
+
+Usage:
+  python3 scripts/extract-nova-books.py           # from PDFs in attachments/
+  python3 scripts/extract-nova-books.py --retag   # recompute h/s in existing JSON
+
+Hoofdstuk/paragraaf come ONLY from a page's running header (first lines,
+uppercase "HOOFDSTUK n" / "PARAGRAAF n"). Body text such as "hoofdstuk 12
+Elektriciteit" in the Examentraining or "paragraaf 3" in a practicum must not
+move pages into another chapter. Pages without such a header (chapter openers,
+Examentraining, Vaardigheden, register) get h/s = null.
+"""
 
 from __future__ import annotations
 
 import json
 import re
+import sys
 from pathlib import Path
-
-import fitz
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "src" / "lib" / "nova-books"
@@ -58,8 +68,19 @@ BOOKS = [
     },
 ]
 
-HOOFDSTUK = re.compile(r"HOOFDSTUK\s+(\d+)\b", re.I)
-PARAGRAAF = re.compile(r"PARAGRAAF\s+(\d+)\b", re.I)
+HOOFDSTUK = re.compile(r"HOOFDSTUK\s+(\d+)\b")
+PARAGRAAF = re.compile(r"PARAGRAAF\s+(\d+)\b")
+HEADER_LINES = 4
+
+
+def section_of(text: str) -> tuple[int | None, int | None]:
+    """(hoofdstuk, paragraaf) from the page's running header, else (None, None)."""
+    head = "\n".join(text.split("\n")[:HEADER_LINES])
+    h = HOOFDSTUK.search(head)
+    if not h:
+        return None, None
+    p = PARAGRAAF.search(head)
+    return int(h.group(1)), (int(p.group(1)) if p else None)
 SPACE = re.compile(r"[ \t]+\n")
 MULTI = re.compile(r"\n{3,}")
 
@@ -72,27 +93,23 @@ def clean(text: str) -> str:
 
 
 def extract_book(spec: dict) -> dict:
+    import fitz  # PyMuPDF; only needed when extracting from PDFs
+
     path = ATTACH / spec["file"]
     if not path.exists():
         raise FileNotFoundError(path)
     doc = fitz.open(str(path))
     pages = []
-    chapter = None
-    paragraph = None
+    seen_chapter = False
     for i, page in enumerate(doc):
         raw = page.get_text("text") or ""
         text = clean(raw)
         if len(text) < 60:
             continue
-        h = HOOFDSTUK.search(text)
-        if h:
-            chapter = int(h.group(1))
-            paragraph = None
-        p = PARAGRAAF.search(text)
-        if p:
-            paragraph = int(p.group(1))
-        # Skip front matter without a chapter yet (covers, inhoud).
-        if chapter is None:
+        chapter, paragraph = section_of(text)
+        seen_chapter = seen_chapter or chapter is not None
+        # Skip front matter before the first chapter (covers, inhoud).
+        if not seen_chapter:
             continue
         pages.append({"p": i + 1, "h": chapter, "s": paragraph, "t": text})
     doc.close()
@@ -105,7 +122,28 @@ def extract_book(spec: dict) -> dict:
     }
 
 
+def retag() -> None:
+    """Recompute h/s for the committed JSON without needing the PDFs."""
+    for spec in BOOKS:
+        dest = OUT / f"{spec['id']}.json"
+        data = json.loads(dest.read_text(encoding="utf-8"))
+        changed = 0
+        for page in data["pages"]:
+            h, s = section_of(page["t"])
+            if (page["h"], page["s"]) != (h, s):
+                changed += 1
+            page["h"], page["s"] = h, s
+        dest.write_text(
+            json.dumps(data, ensure_ascii=False, separators=(",", ":")),
+            encoding="utf-8",
+        )
+        print(f"{spec['id']}: retagged {changed} pages")
+
+
 def main() -> None:
+    if "--retag" in sys.argv:
+        retag()
+        return
     OUT.mkdir(parents=True, exist_ok=True)
     index = []
     for spec in BOOKS:
