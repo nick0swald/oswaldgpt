@@ -714,27 +714,39 @@ export function StudentApp() {
         ) : null}
 
         {screen === "help" && step ? (
-          <div className="grid min-w-0 gap-4">
-            {step.questionShort ? (
-              <p className="text-sm leading-relaxed text-muted">{step.questionShort}</p>
-            ) : null}
-            {hints.map((h) => (
-              <div key={h.step} className="grid gap-2">
-                <p className="text-xs font-bold uppercase tracking-wide text-leaf">
-                  Hint {h.step}
-                  {h.step === 1 ? " · tip" : ""}
-                </p>
-                <div className="rounded-[var(--radius-lg)] rounded-tl-sm bg-paper px-4 py-3 leading-relaxed text-fg">
-                  {h.help}
-                </div>
-                {h.tip ? (
-                  <div className="rounded-[var(--radius-lg)] rounded-tl-sm bg-surface px-4 py-3 leading-relaxed text-fg">
-                    {h.tip}
-                  </div>
-                ) : null}
+          <article
+            key={step.step}
+            className="story-in grid min-h-[calc(100dvh-8rem)] min-w-0 content-between gap-6"
+          >
+            <div className="grid gap-4">
+              <div className="flex items-center gap-1.5" aria-hidden="true">
+                {Array.from({ length: step.hintCount }, (_, i) => (
+                  <span
+                    key={i}
+                    className={
+                      i + 1 === step.step
+                        ? "h-1.5 w-8 rounded-full bg-primary"
+                        : i + 1 < step.step
+                          ? "h-1.5 w-4 rounded-full bg-leaf"
+                          : "h-1.5 w-4 rounded-full bg-border"
+                    }
+                  />
+                ))}
               </div>
-            ))}
-            <div className="grid gap-2 pt-1">
+              <p className="text-xs font-bold uppercase tracking-wide text-leaf">
+                Hint {step.step} van {step.hintCount}
+              </p>
+              {step.questionShort ? (
+                <p className="text-sm leading-relaxed text-muted">{step.questionShort}</p>
+              ) : null}
+              <h2 className="text-2xl font-extrabold leading-snug tracking-tight text-fg">
+                {step.help}
+              </h2>
+              {step.tip ? (
+                <p className="text-lg leading-relaxed text-muted">{step.tip}</p>
+              ) : null}
+            </div>
+            <div className="grid gap-3">
               {step.canAdvance ? (
                 <Button type="button" size="lg" variant="primary" loading={loading} onClick={onAdvance}>
                   <span className="min-w-0 flex-1">
@@ -753,7 +765,7 @@ export function StudentApp() {
                 </Button>
               ) : null}
             </div>
-          </div>
+          </article>
         ) : null}
 
         {screen === "answer" && answer ? (

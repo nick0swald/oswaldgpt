@@ -185,7 +185,7 @@ export async function submitQuestion(input: {
   const image = input.imageDataUrl?.trim();
   if (text && !image && isOffTopicBanter(text)) {
     const id = randomUUID();
-    const row = emptySession(id, name, classCode);
+    const row = emptySession(id, session.student_name, session.class_code);
     row.submitted_question = true;
     row.questions_count = 1;
     row.help_json = JSON.stringify({
@@ -208,7 +208,7 @@ export async function submitQuestion(input: {
           steps_shown, extra_tips, extra_mask, answer_shown, help_json,
           question_submitted_at, answer_shown_at, last_active_at)
         values (
-          ${id}, ${name}, ${classCode}, true, 1,
+          ${id}, ${session.student_name}, ${session.class_code}, true, 1,
           0, 0, 0, false, ${row.help_json},
           now(), null, now()
         )
